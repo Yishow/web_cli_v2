@@ -24,6 +24,12 @@ body {
   background-color: rgba(255, 255, 255, 0.3);
 }
 
+.wterm .term-box-drawing {
+  width: 1ch;
+  overflow: hidden;
+  text-align: center;
+}
+
 select option {
   background-color: #27272a;
   color: #fff;

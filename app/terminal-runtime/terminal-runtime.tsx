@@ -23,6 +23,7 @@ import {
 import { buildSshConnectPayload } from "../ssh-mode";
 import { TERMINAL_STYLE } from "../terminal-style";
 import { parseSshControlMessage } from "../../src/ssh-control-message";
+import { patchBoxDrawingRendererWorkaround } from "./box-drawing-workaround";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./core-loader";
 import { collectDiagnosticsSnapshot, createDiagnosticsState, syncDebugAdapter } from "./diagnostics";
 import { createTerminalOutputBatcher } from "./output-batcher";
@@ -319,6 +320,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
           rows: terminal.rows,
         };
         setCoreReady(true);
+        patchBoxDrawingRendererWorkaround(terminal);
         patchWideCharRendererWorkaround(terminal.bridge);
         syncDebugAdapter(terminal, debugEnabledRef.current);
 

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import type { TerminalCore } from "@wterm/core";
+import type { WTerm } from "@wterm/dom";
 import { GhosttyCore } from "@wterm/ghostty";
 import { Terminal, useTerminal } from "@wterm/react";
 
@@ -16,6 +17,7 @@ import type { AgentStreamState } from "./agent-shell";
 import { AgentStreamShell } from "./agent-shell";
 import type { CoreType } from "./core-preference";
 import { TERMINAL_STYLE } from "./terminal-style";
+import { patchBoxDrawingRendererWorkaround } from "./terminal-runtime/box-drawing-workaround";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
 import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
@@ -41,7 +43,8 @@ export const AgentTerminal = forwardRef<AgentTerminalHandle, AgentTerminalProps>
     const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
     const [coreReady, setCoreReady] = useState(false);
 
-    const handleReady = useCallback((terminal: { bridge: Parameters<typeof patchWideCharRendererWorkaround>[0] }) => {
+    const handleReady = useCallback((terminal: WTerm) => {
+      patchBoxDrawingRendererWorkaround(terminal);
       patchWideCharRendererWorkaround(terminal.bridge);
       setCoreReady(true);
       onTitleChange?.("Agent Stream");
