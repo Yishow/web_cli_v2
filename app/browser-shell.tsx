@@ -12,6 +12,7 @@ import { BROWSER_SHELL_FILES, BROWSER_SHELL_GREETING } from "./browser-shell-fil
 import { TERMINAL_STYLE } from "./terminal-style";
 import { attachImeCompositionAnchor } from "./terminal-runtime/ime-anchor";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
+import { patchFullRepaintWorkaround } from "./terminal-runtime/full-repaint-workaround";
 import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
 interface BrowserShellProps {
@@ -29,6 +30,7 @@ export function BrowserShell({ coreType, onTitleChange, className }: BrowserShel
   const [coreReady, setCoreReady] = useState(false);
 
   const handleReady = useCallback((terminal: WTerm) => {
+    patchFullRepaintWorkaround(terminal.bridge);
     patchWideCharRendererWorkaround(terminal.bridge);
     imeAnchorCleanupRef.current?.();
     imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);

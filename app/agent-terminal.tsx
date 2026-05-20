@@ -17,6 +17,7 @@ import type { AgentStreamState } from "./agent-shell";
 import { AgentStreamShell } from "./agent-shell";
 import type { CoreType } from "./core-preference";
 import { TERMINAL_STYLE } from "./terminal-style";
+import { patchFullRepaintWorkaround } from "./terminal-runtime/full-repaint-workaround";
 import { attachImeCompositionAnchor } from "./terminal-runtime/ime-anchor";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
 import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
@@ -45,6 +46,7 @@ export const AgentTerminal = forwardRef<AgentTerminalHandle, AgentTerminalProps>
     const [coreReady, setCoreReady] = useState(false);
 
     const handleReady = useCallback((terminal: WTerm) => {
+      patchFullRepaintWorkaround(terminal.bridge);
       patchWideCharRendererWorkaround(terminal.bridge);
       imeAnchorCleanupRef.current?.();
       imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);

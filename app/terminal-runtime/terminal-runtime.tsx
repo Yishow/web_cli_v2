@@ -25,6 +25,7 @@ import { TERMINAL_STYLE } from "../terminal-style";
 import { parseSshControlMessage } from "../../src/ssh-control-message";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./core-loader";
 import { collectDiagnosticsSnapshot, createDiagnosticsState, syncDebugAdapter } from "./diagnostics";
+import { patchFullRepaintWorkaround } from "./full-repaint-workaround";
 import { attachImeCompositionAnchor } from "./ime-anchor";
 import { createTerminalOutputBatcher } from "./output-batcher";
 import { getReadyTransportStrategy } from "./ready-transport-strategy";
@@ -321,6 +322,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
           rows: terminal.rows,
         };
         setCoreReady(true);
+        patchFullRepaintWorkaround(terminal.bridge);
         patchWideCharRendererWorkaround(terminal.bridge);
         imeAnchorCleanupRef.current?.();
         imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);

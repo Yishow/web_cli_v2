@@ -1,6 +1,7 @@
 import type { CellData, TerminalCore } from "@wterm/core";
 
 const patchedCores = new WeakSet<TerminalCore>();
+const DEFAULT_COLOR = 256;
 const ZERO_WIDTH_SPACE = 0x200b;
 
 function isWideCodePoint(codePoint: number): boolean {
@@ -29,8 +30,10 @@ function normalizeContinuationCell(cell: CellData, previousCell: CellData | null
   }
 
   return {
-    ...cell,
     char: ZERO_WIDTH_SPACE,
+    fg: DEFAULT_COLOR,
+    bg: DEFAULT_COLOR,
+    flags: 0,
   };
 }
 

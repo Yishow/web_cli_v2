@@ -68,7 +68,14 @@ function createCore(cells: CellData[]): TerminalCore {
 test("converts wide-character continuation cells into zero-width spaces for DOM rendering", () => {
   const core = createCore([
     createCell("あ".codePointAt(0)!),
-    createCell(32),
+    {
+      ...createCell(32),
+      fg: 7,
+      bg: 1,
+      flags: 0x21,
+      fgRgb: 0xffffff,
+      bgRgb: 0xff0000,
+    },
     createCell("A".codePointAt(0)!),
   ]);
 
@@ -76,6 +83,11 @@ test("converts wide-character continuation cells into zero-width spaces for DOM 
 
   assert.equal(core.getCell(0, 0).char, "あ".codePointAt(0)!);
   assert.equal(core.getCell(0, 1).char, 0x200b);
+  assert.equal(core.getCell(0, 1).fg, 256);
+  assert.equal(core.getCell(0, 1).bg, 256);
+  assert.equal(core.getCell(0, 1).flags, 0);
+  assert.equal(core.getCell(0, 1).fgRgb, undefined);
+  assert.equal(core.getCell(0, 1).bgRgb, undefined);
   assert.equal(core.getCell(0, 2).char, "A".codePointAt(0)!);
   assert.equal(core.getScrollbackCell(0, 1).char, 0x200b);
 });
