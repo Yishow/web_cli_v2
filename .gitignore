@@ -15,6 +15,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.playwright-cli
 
 # Coverage directory
 coverage

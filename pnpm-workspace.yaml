@@ -2,3 +2,4 @@ allowBuilds:
   esbuild: false
   node-pty: true
   sharp: true
+  unrs-resolver: true
