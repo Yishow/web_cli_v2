@@ -4,6 +4,10 @@ import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import { randomUUID } from "crypto";
+import {
+  createPtyClientMessageState,
+  handlePtyClientMessage,
+} from "./src/pty-client-message";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOST || "127.0.0.1";
@@ -25,6 +29,7 @@ function handlePTYConnection(ws: WebSocket, sessionName?: string) {
   const tmuxSession = sessionName || `webcli-${id.slice(0, 8)}`;
 
   let ptyProcess: pty.IPty | null = null;
+  const messageState = createPtyClientMessageState();
 
   function spawnPTY(cols: number, rows: number) {
     try {
@@ -72,23 +77,27 @@ function handlePTYConnection(ws: WebSocket, sessionName?: string) {
 
   ws.on("message", (msg: Buffer | string) => {
     const input = typeof msg === "string" ? msg : msg.toString("utf-8");
+    const action = handlePtyClientMessage(messageState, input, ptyProcess !== null);
 
-    if (input.startsWith("\x1b[RESIZE:")) {
-      const match = input.match(/\x1b\[RESIZE:(\d+);(\d+)\]/);
-      if (match) {
-        const cols = parseInt(match[1], 10);
-        const rows = parseInt(match[2], 10);
-        if (!ptyProcess) {
-          spawnPTY(cols, rows);
-        } else {
-          ptyProcess.resize(cols, rows);
+    if (action.type === "spawn") {
+      spawnPTY(action.cols, action.rows);
+
+      if (ptyProcess) {
+        for (const bufferedInput of action.bufferedInput) {
+          ptyProcess.write(bufferedInput);
         }
-        return;
       }
+
+      return;
     }
 
-    if (ptyProcess) {
-      ptyProcess.write(input);
+    if (action.type === "resize") {
+      ptyProcess?.resize(action.cols, action.rows);
+      return;
+    }
+
+    if (action.type === "write") {
+      ptyProcess?.write(action.data);
     }
   });
 
