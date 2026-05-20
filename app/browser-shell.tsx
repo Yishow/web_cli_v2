@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TerminalCore } from "@wterm/core";
-import type { WTerm } from "@wterm/dom";
 import { GhosttyCore } from "@wterm/ghostty";
 import { BashShell } from "@wterm/just-bash";
 import { Terminal, useTerminal } from "@wterm/react";
@@ -10,10 +9,7 @@ import { Terminal, useTerminal } from "@wterm/react";
 import type { CoreType } from "./core-preference";
 import { BROWSER_SHELL_FILES, BROWSER_SHELL_GREETING } from "./browser-shell-files";
 import { TERMINAL_STYLE } from "./terminal-style";
-import { attachImeCompositionAnchor } from "./terminal-runtime/ime-anchor";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
-import { patchFullRepaintWorkaround } from "./terminal-runtime/full-repaint-workaround";
-import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
 interface BrowserShellProps {
   coreType: CoreType;
@@ -24,16 +20,11 @@ interface BrowserShellProps {
 export function BrowserShell({ coreType, onTitleChange, className }: BrowserShellProps) {
   const { ref, write } = useTerminal();
   const shellRef = useRef<BashShell | null>(null);
-  const imeAnchorCleanupRef = useRef<(() => void) | null>(null);
   const [ghosttyCore, setGhosttyCore] = useState<TerminalCore | null>(null);
   const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
   const [coreReady, setCoreReady] = useState(false);
 
-  const handleReady = useCallback((terminal: WTerm) => {
-    patchFullRepaintWorkaround(terminal.bridge);
-    patchWideCharRendererWorkaround(terminal.bridge);
-    imeAnchorCleanupRef.current?.();
-    imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);
+  const handleReady = useCallback(() => {
     setCoreReady(true);
     onTitleChange?.("Demo Shell");
 
@@ -84,8 +75,6 @@ export function BrowserShell({ coreType, onTitleChange, className }: BrowserShel
 
   useEffect(() => {
     return () => {
-      imeAnchorCleanupRef.current?.();
-      imeAnchorCleanupRef.current = null;
       shellRef.current = null;
     };
   }, []);
