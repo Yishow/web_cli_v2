@@ -4,6 +4,13 @@ import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import { randomUUID } from "crypto";
+
+import {
+  InvalidSessionNameError,
+  killSession,
+  listSessions,
+  sendJson,
+} from "./src/tmux-sessions";
 import {
   createPtyClientMessageState,
   handlePtyClientMessage,
@@ -115,6 +122,45 @@ function handlePTYConnection(ws: WebSocket, sessionName?: string) {
 app.prepare().then(() => {
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url || "/", true);
+    const pathname = parsedUrl.pathname || "/";
+
+    if (pathname === "/api/sessions" && req.method === "GET") {
+      try {
+        sendJson(res, 200, listSessions());
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[api/sessions] Failed to list sessions:", message);
+        sendJson(res, 500, { error: "Failed to list tmux sessions" });
+      }
+      return;
+    }
+
+    const deleteMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/);
+    if (deleteMatch && req.method === "DELETE") {
+      const sessionName = decodeURIComponent(deleteMatch[1]);
+
+      try {
+        killSession(sessionName);
+        sendJson(res, 200, { success: true, name: sessionName });
+      } catch (error) {
+        if (error instanceof InvalidSessionNameError) {
+          sendJson(res, 400, { error: "Invalid session name" });
+          return;
+        }
+
+        const tmuxError = error as Error & { status?: number };
+        if (tmuxError?.status === 1) {
+          sendJson(res, 404, { error: `Session "${sessionName}" not found` });
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[api/sessions] Failed to kill "${sessionName}":`, message);
+        sendJson(res, 500, { error: "Failed to kill tmux session" });
+      }
+      return;
+    }
+
     handle(req, res, parsedUrl);
   });
 
