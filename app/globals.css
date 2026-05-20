@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@import "@wterm/react/css";
+
+:root {
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+body {
+  font-family: var(--font-mono);
+}

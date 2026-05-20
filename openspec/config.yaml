@@ -1,0 +1,11 @@
+schema: spec-driven
+
+context: |
+  Tech stack: TypeScript, Next.js 16 (App Router + Turbopack), React 19, wterm (@wterm/react + @wterm/dom + @wterm/core)
+  Backend: custom server.ts (Next.js + WebSocket + node-pty + tmux)
+  Terminal: wterm (Zig WASM core, DOM rendering), tmux new-session -A for persistence
+  Styling: Tailwind CSS v4 + @tailwindcss/postcss
+  Package manager: pnpm
+  Node: v24.15.0
+  OS: Ubuntu 26.04 LTS
+  Language: TypeScript only, ES modules
