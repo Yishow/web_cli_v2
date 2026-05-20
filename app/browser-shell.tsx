@@ -10,6 +10,7 @@ import { Terminal, useTerminal } from "@wterm/react";
 import type { CoreType } from "./core-preference";
 import { BROWSER_SHELL_FILES, BROWSER_SHELL_GREETING } from "./browser-shell-files";
 import { TERMINAL_STYLE } from "./terminal-style";
+import { attachImeCompositionAnchor } from "./terminal-runtime/ime-anchor";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
 import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
@@ -22,12 +23,15 @@ interface BrowserShellProps {
 export function BrowserShell({ coreType, onTitleChange, className }: BrowserShellProps) {
   const { ref, write } = useTerminal();
   const shellRef = useRef<BashShell | null>(null);
+  const imeAnchorCleanupRef = useRef<(() => void) | null>(null);
   const [ghosttyCore, setGhosttyCore] = useState<TerminalCore | null>(null);
   const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
   const [coreReady, setCoreReady] = useState(false);
 
   const handleReady = useCallback((terminal: WTerm) => {
     patchWideCharRendererWorkaround(terminal.bridge);
+    imeAnchorCleanupRef.current?.();
+    imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);
     setCoreReady(true);
     onTitleChange?.("Demo Shell");
 
@@ -78,6 +82,8 @@ export function BrowserShell({ coreType, onTitleChange, className }: BrowserShel
 
   useEffect(() => {
     return () => {
+      imeAnchorCleanupRef.current?.();
+      imeAnchorCleanupRef.current = null;
       shellRef.current = null;
     };
   }, []);

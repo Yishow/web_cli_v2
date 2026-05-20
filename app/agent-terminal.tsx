@@ -17,6 +17,7 @@ import type { AgentStreamState } from "./agent-shell";
 import { AgentStreamShell } from "./agent-shell";
 import type { CoreType } from "./core-preference";
 import { TERMINAL_STYLE } from "./terminal-style";
+import { attachImeCompositionAnchor } from "./terminal-runtime/ime-anchor";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
 import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
@@ -37,6 +38,7 @@ export const AgentTerminal = forwardRef<AgentTerminalHandle, AgentTerminalProps>
   function AgentTerminal({ coreType, onTitleChange, onStateChange, className }, forwardedRef) {
     const { ref, write } = useTerminal();
     const shellRef = useRef<AgentStreamShell | null>(null);
+    const imeAnchorCleanupRef = useRef<(() => void) | null>(null);
     const onStateChangeRef = useRef(onStateChange);
     const [ghosttyCore, setGhosttyCore] = useState<TerminalCore | null>(null);
     const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
@@ -44,6 +46,8 @@ export const AgentTerminal = forwardRef<AgentTerminalHandle, AgentTerminalProps>
 
     const handleReady = useCallback((terminal: WTerm) => {
       patchWideCharRendererWorkaround(terminal.bridge);
+      imeAnchorCleanupRef.current?.();
+      imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);
       setCoreReady(true);
       onTitleChange?.("Agent Stream");
 
@@ -115,6 +119,8 @@ export const AgentTerminal = forwardRef<AgentTerminalHandle, AgentTerminalProps>
 
     useEffect(() => {
       return () => {
+        imeAnchorCleanupRef.current?.();
+        imeAnchorCleanupRef.current = null;
         shellRef.current = null;
       };
     }, []);

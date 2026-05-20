@@ -18,6 +18,7 @@ import {
 import { AgentTerminal, type AgentTerminalHandle } from "./agent-terminal";
 import type { AgentStreamState } from "./agent-shell";
 import { BrowserShell } from "./browser-shell";
+import { getCoreGuidance } from "./core-guidance";
 import {
   buildSshConnectPayload,
   clearSshCredentials,
@@ -79,6 +80,7 @@ export default function WebCliV2() {
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugPanelTab>("escape");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [newSessionInput, setNewSessionInput] = useState("webcli-main");
 
   const runtimeRef = useRef<TerminalRuntimeHandle | null>(null);
@@ -87,6 +89,8 @@ export default function WebCliV2() {
   const panelContentRef = useRef<HTMLDivElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const settingsBtnRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuBtnRef = useRef<HTMLButtonElement | null>(null);
   const modeSwitchMountedRef = useRef(false);
 
   const loadSessions = useCallback(async () => {
@@ -121,6 +125,11 @@ export default function WebCliV2() {
     const nextTheme = event.currentTarget.value as ThemeId;
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
     setThemeId(nextTheme);
+  }, []);
+
+  const handleUseRecommendedCore = useCallback(() => {
+    window.localStorage.setItem(CORE_PREFERENCE_KEY, "ghostty");
+    setCoreType("ghostty");
   }, []);
 
   const handleTitle = useCallback((title: string) => {
@@ -343,6 +352,7 @@ export default function WebCliV2() {
   }, []);
 
   const currentTheme = getThemeMeta(themeId ?? DEFAULT_THEME);
+  const coreGuidance = getCoreGuidance(coreType);
   const sshConnectReady = buildSshConnectPayload(sshConfig) !== null;
   const sshTargetLabel = sshConfig.host
     ? `${sshConfig.username || "user"}@${sshConfig.host}:${sshConfig.port || "22"}`
@@ -443,6 +453,21 @@ export default function WebCliV2() {
     return () => { document.removeEventListener("mousedown", handler); };
   }, [settingsOpen]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        mobileMenuRef.current?.contains(e.target as Node) ||
+        mobileMenuBtnRef.current?.contains(e.target as Node)
+      ) {
+        return;
+      }
+      setMobileMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => { document.removeEventListener("mousedown", handler); };
+  }, [mobileMenuOpen]);
+
   return (
     <div className="flex h-screen flex-col bg-[#08090d]">
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3">
@@ -521,132 +546,148 @@ export default function WebCliV2() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={agentTerminalOpen ? handleCloseAgentTerminal : handleOpenAgentTerminal}
-            className={`rounded px-2 py-1 text-[10px] transition-colors ${
-              agentTerminalOpen
-                ? "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/20"
-                : "text-fuchsia-200/50 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
-            }`}
-            title="Agent output terminal"
-          >
-            {agentTerminalOpen ? "Close Agent" : "Agent View"}
-          </button>
-
-          <div className="h-3 w-px bg-white/10" />
-
-          <button
-            onClick={browserShellOpen ? handleCloseBrowserShell : handleOpenBrowserShell}
-            className={`rounded px-2 py-1 text-[10px] transition-colors ${
-              browserShellOpen
-                ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/20"
-                : "text-cyan-200/50 hover:bg-cyan-500/10 hover:text-cyan-200"
-            }`}
-            title="Browser-only demo shell"
-          >
-            {browserShellOpen ? "Close Demo" : "Try Demo Shell"}
-          </button>
-
-          <div className="h-3 w-px bg-white/10" />
-
-          <div className="relative">
+          {/* Desktop-only secondary buttons */}
+          <div className="hidden sm:flex items-center gap-2">
             <button
-              ref={settingsBtnRef}
-              onClick={() => setSettingsOpen((o) => !o)}
+              onClick={agentTerminalOpen ? handleCloseAgentTerminal : handleOpenAgentTerminal}
               className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                settingsOpen
-                  ? "bg-white/10 text-white/70"
+                agentTerminalOpen
+                  ? "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/20"
+                  : "text-fuchsia-200/50 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
+              }`}
+              title="Agent output terminal"
+            >
+              {agentTerminalOpen ? "Close Agent" : "Agent View"}
+            </button>
+
+            <div className="h-3 w-px bg-white/10" />
+
+            <button
+              onClick={browserShellOpen ? handleCloseBrowserShell : handleOpenBrowserShell}
+              className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                browserShellOpen
+                  ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/20"
+                  : "text-cyan-200/50 hover:bg-cyan-500/10 hover:text-cyan-200"
+              }`}
+              title="Browser-only demo shell"
+            >
+              {browserShellOpen ? "Close Demo" : "Try Demo Shell"}
+            </button>
+
+            <div className="h-3 w-px bg-white/10" />
+
+            <div className="relative">
+              <button
+                ref={settingsBtnRef}
+                onClick={() => setSettingsOpen((o) => !o)}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  settingsOpen
+                    ? "bg-white/10 text-white/70"
+                    : "text-white/30 hover:bg-white/5 hover:text-white/60"
+                }`}
+                title="設定"
+              >
+                ⚙ 設定
+              </button>
+              {settingsOpen && (
+                <div
+                  ref={settingsRef}
+                  className="absolute right-0 top-full z-50 mt-1.5 w-60 rounded-lg border border-white/10 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-sm"
+                >
+                  <div className="mb-2.5 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
+                    偏好設定
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <label className="w-16 shrink-0 text-[10px] text-white/45">Core</label>
+                      <select
+                        value={coreType}
+                        onChange={handleCoreChange}
+                        className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                      >
+                        <option value="builtin">Built-in (~12KB)</option>
+                        <option value="ghostty">Ghostty (~400KB)</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="w-16 shrink-0 text-[10px] text-white/45">Theme</label>
+                      <select
+                        value={themeId}
+                        onChange={handleThemeChange}
+                        className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                      >
+                        {THEMES.map((theme) => (
+                          <option key={theme.id} value={theme.id}>
+                            {theme.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="pt-1 text-[9px] text-white/20">
+                      Core: {CORE_CONFIG[coreType].label} ({CORE_CONFIG[coreType].size})
+                      {" · "}Theme: {currentTheme.label}
+                    </div>
+                    {coreGuidance && (
+                      <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-[9px] text-amber-100/85">
+                        <div className="font-semibold text-amber-200">{coreGuidance.title}</div>
+                        <div className="mt-1 text-amber-100/70">{coreGuidance.description}</div>
+                        <button
+                          onClick={handleUseRecommendedCore}
+                          className="mt-2 rounded border border-amber-400/30 px-2 py-1 text-[9px] font-medium text-amber-100 transition-colors hover:bg-amber-400/10"
+                        >
+                          切換到 Ghostty
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="h-3 w-px bg-white/10" />
+
+            <button
+              onClick={toggleDebug}
+              className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                debugMode
+                  ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
                   : "text-white/30 hover:bg-white/5 hover:text-white/60"
               }`}
-              title="設定"
+              title="Debug Mode (Ctrl+Shift+D)"
             >
-              ⚙ 設定
+              {debugMode ? "Debug ON" : "Debug"}
             </button>
-            {settingsOpen && (
-              <div
-                ref={settingsRef}
-                className="absolute right-0 top-full z-50 mt-1.5 w-60 rounded-lg border border-white/10 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-sm"
-              >
-                <div className="mb-2.5 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
-                  偏好設定
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <label className="w-16 shrink-0 text-[10px] text-white/45">Core</label>
-                    <select
-                      value={coreType}
-                      onChange={handleCoreChange}
-                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
-                    >
-                      <option value="builtin">Built-in (~12KB)</option>
-                      <option value="ghostty">Ghostty (~400KB)</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <label className="w-16 shrink-0 text-[10px] text-white/45">Theme</label>
-                    <select
-                      value={themeId}
-                      onChange={handleThemeChange}
-                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
-                    >
-                      {THEMES.map((theme) => (
-                        <option key={theme.id} value={theme.id}>
-                          {theme.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="pt-1 text-[9px] text-white/20">
-                    Core: {CORE_CONFIG[coreType].label} ({CORE_CONFIG[coreType].size})
-                    {" · "}Theme: {currentTheme.label}
-                  </div>
-                </div>
-              </div>
-            )}
+
+            <div className="h-3 w-px bg-white/10" />
           </div>
 
-          <div className="h-3 w-px bg-white/10" />
-
-          <button
-            onClick={toggleDebug}
-            className={`rounded px-2 py-1 text-[10px] transition-colors ${
-              debugMode
-                ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
-                : "text-white/30 hover:bg-white/5 hover:text-white/60"
-            }`}
-            title="Debug Mode (Ctrl+Shift+D)"
-          >
-            {debugMode ? "Debug ON" : "Debug"}
-          </button>
-
-          <div className="h-3 w-px bg-white/10" />
-
+          {/* Status indicator (always visible) */}
           {browserShellOpen ? (
             <div className="flex items-center gap-1.5 text-[10px] text-cyan-300/80">
               <span className="text-[8px]">◇</span>
-              <span>browser-only · no backend · no persistence</span>
+              <span className="hidden sm:inline">browser-only · no backend · no persistence</span>
             </div>
           ) : agentTerminalOpen ? (
             agentState.status === "error" && agentState.errorMessage ? (
               <div className="flex items-center gap-1.5 text-[10px] text-red-400">
                 <span className="text-[8px]">▲</span>
-                <span className="max-w-44 truncate">{agentState.errorMessage}</span>
+                <span className="max-w-28 truncate sm:max-w-44">{agentState.errorMessage}</span>
               </div>
             ) : agentState.status === "loading" || agentState.status === "streaming" ? (
               <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-fuchsia-300">
                 <span className="text-[8px]">◌</span>
-                <span>{agentState.status === "loading" ? "Agent 準備中..." : "Agent streaming..."}</span>
+                <span>{agentState.status === "loading" ? "Agent 準備中..." : "streaming..."}</span>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 text-[10px] text-fuchsia-300/80">
                 <span className="text-[8px]">◇</span>
-                <span>read-mostly terminal · dedicated endpoint</span>
+                <span className="hidden sm:inline">read-mostly terminal · dedicated endpoint</span>
               </div>
             )
           ) : connectionStatus === "error" && connectionError ? (
             <div className="flex items-center gap-1.5 text-[10px] text-red-400">
               <span className="text-[8px]">▲</span>
-              <span className="max-w-44 truncate">{connectionError}</span>
+              <span className="max-w-28 truncate sm:max-w-44">{connectionError}</span>
             </div>
           ) : connected ? (
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
@@ -673,9 +714,97 @@ export default function WebCliV2() {
               disabled={mode === "ssh" && !sshConnectReady}
             >
               <span className="text-[8px]">○</span>
-              <span>{mode === "ssh" ? "SSH — 點擊連線" : "未連線 — 點擊連線"}</span>
+              <span>{mode === "ssh" ? "SSH 連線" : "未連線"}</span>
             </button>
           )}
+
+          {/* Mobile hamburger menu */}
+          <div className="relative sm:hidden">
+            <button
+              ref={mobileMenuBtnRef}
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              className={`rounded px-2.5 py-1 text-[13px] leading-none transition-colors ${
+                mobileMenuOpen
+                  ? "bg-white/10 text-white/70"
+                  : "text-white/35 hover:bg-white/5 hover:text-white/60"
+              }`}
+            >
+              ⋮
+            </button>
+            {mobileMenuOpen && (
+              <div
+                ref={mobileMenuRef}
+                className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border border-white/10 bg-zinc-900/98 p-2 shadow-2xl backdrop-blur-sm"
+              >
+                <button
+                  onClick={() => {
+                    agentTerminalOpen ? handleCloseAgentTerminal() : handleOpenAgentTerminal();
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full rounded px-2 py-2 text-left text-[10px] transition-colors ${
+                    agentTerminalOpen
+                      ? "bg-fuchsia-500/10 text-fuchsia-300"
+                      : "text-fuchsia-200/70 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
+                  }`}
+                >
+                  {agentTerminalOpen ? "Close Agent" : "Agent View"}
+                </button>
+                <button
+                  onClick={() => {
+                    browserShellOpen ? handleCloseBrowserShell() : handleOpenBrowserShell();
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full rounded px-2 py-2 text-left text-[10px] transition-colors ${
+                    browserShellOpen
+                      ? "bg-cyan-500/10 text-cyan-300"
+                      : "text-cyan-200/70 hover:bg-cyan-500/10 hover:text-cyan-200"
+                  }`}
+                >
+                  {browserShellOpen ? "Close Demo" : "Demo Shell"}
+                </button>
+                <button
+                  onClick={() => { toggleDebug(); setMobileMenuOpen(false); }}
+                  className={`w-full rounded px-2 py-2 text-left text-[10px] transition-colors ${
+                    debugMode
+                      ? "bg-amber-500/10 text-amber-400"
+                      : "text-white/45 hover:bg-white/5 hover:text-white/70"
+                  }`}
+                >
+                  {debugMode ? "Debug ON" : "Debug"}
+                </button>
+                <div className="mt-1 border-t border-white/[0.06] pt-1.5">
+                  <div className="mb-1.5 px-2 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
+                    偏好設定
+                  </div>
+                  <div className="flex items-center gap-2 px-2 py-1">
+                    <label className="w-12 shrink-0 text-[10px] text-white/45">Core</label>
+                    <select
+                      value={coreType}
+                      onChange={handleCoreChange}
+                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                    >
+                      <option value="builtin">Built-in (~12KB)</option>
+                      <option value="ghostty">Ghostty (~400KB)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 px-2 py-1">
+                    <label className="w-12 shrink-0 text-[10px] text-white/45">Theme</label>
+                    <select
+                      value={themeId}
+                      onChange={handleThemeChange}
+                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                    >
+                      {THEMES.map((theme) => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -688,7 +817,7 @@ export default function WebCliV2() {
         )}
 
         <div
-          className={`absolute bottom-0 left-0 top-0 z-40 w-72 border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200 ${
+          className={`absolute bottom-0 left-0 top-0 z-40 w-full sm:w-72 border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200 ${
             !browserShellOpen && !agentTerminalOpen && mode === "local" && sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -798,7 +927,7 @@ export default function WebCliV2() {
         </div>
 
         {!browserShellOpen && !agentTerminalOpen && mode === "ssh" ? (
-          <div className="absolute inset-x-4 top-4 z-20 rounded-xl border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+          <div className="absolute inset-x-2 top-2 z-20 rounded-xl sm:inset-x-4 sm:top-4 border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <div className="text-[10px] font-semibold tracking-widest text-cyan-300 uppercase">
@@ -823,24 +952,24 @@ export default function WebCliV2() {
                 type="text"
                 value={sshConfig.host}
                 onChange={(event) => handleSshFieldChange("host", event.currentTarget.value)}
-                className="col-span-4 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                className="col-span-12 sm:col-span-4 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
                 placeholder="host"
               />
               <input
                 type="text"
                 value={sshConfig.port}
                 onChange={(event) => handleSshFieldChange("port", event.currentTarget.value)}
-                className="col-span-2 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                className="col-span-6 sm:col-span-2 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
                 placeholder="22"
               />
               <input
                 type="text"
                 value={sshConfig.username}
                 onChange={(event) => handleSshFieldChange("username", event.currentTarget.value)}
-                className="col-span-3 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                className="col-span-6 sm:col-span-3 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
                 placeholder="username"
               />
-              <div className="col-span-3 flex items-center rounded border border-white/10 bg-zinc-900 p-0.5">
+              <div className="col-span-12 sm:col-span-3 flex items-center rounded border border-white/10 bg-zinc-900 p-0.5">
                 <button
                   onClick={() => handleSshAuthChange("password")}
                   className={`flex-1 rounded px-2 py-1 text-[10px] transition-colors ${
@@ -907,7 +1036,7 @@ export default function WebCliV2() {
         ) : null}
 
         {browserShellOpen ? (
-          <div className="absolute inset-x-4 top-4 z-20 rounded-xl border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+          <div className="absolute inset-x-2 top-2 z-20 rounded-xl sm:inset-x-4 sm:top-4 border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[10px] font-semibold tracking-widest text-cyan-300 uppercase">
@@ -928,7 +1057,7 @@ export default function WebCliV2() {
         ) : null}
 
         {agentTerminalOpen ? (
-          <div className="absolute inset-x-4 top-4 z-20 rounded-xl border border-fuchsia-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+          <div className="absolute inset-x-2 top-2 z-20 rounded-xl sm:inset-x-4 sm:top-4 border border-fuchsia-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
             <div className="mb-3 flex items-start justify-between gap-4">
               <div>
                 <div className="text-[10px] font-semibold tracking-widest text-fuchsia-300 uppercase">

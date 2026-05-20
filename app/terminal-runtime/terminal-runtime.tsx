@@ -25,6 +25,8 @@ import { TERMINAL_STYLE } from "../terminal-style";
 import { parseSshControlMessage } from "../../src/ssh-control-message";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./core-loader";
 import { collectDiagnosticsSnapshot, createDiagnosticsState, syncDebugAdapter } from "./diagnostics";
+import { attachImeCompositionAnchor } from "./ime-anchor";
+import { createTerminalOutputBatcher } from "./output-batcher";
 import { getReadyTransportStrategy } from "./ready-transport-strategy";
 import { sendResizeControlMessage } from "./resize-control-message";
 import { buildTransportWebSocketUrl } from "./transport";
@@ -62,6 +64,18 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
     const intentionalCloseRef = useRef(false);
     const closeReasonRef = useRef<"intentional" | "error" | null>(null);
     const connectionSessionRef = useRef(sessionName);
+    const imeAnchorCleanupRef = useRef<(() => void) | null>(null);
+    const outputBatcherRef = useRef(
+      createTerminalOutputBatcher({
+        write,
+        schedule(flush) {
+          const timer = window.setTimeout(flush, 8);
+          return () => {
+            window.clearTimeout(timer);
+          };
+        },
+      }),
+    );
     const viewportRef = useRef<{ cols: number; rows: number } | null>(null);
     const openSocketRef = useRef<(targetSession: string) => void>(() => {});
     const debugEnabledRef = useRef(debugEnabled);
@@ -187,7 +201,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
             return;
           }
 
-          write(data);
+          outputBatcherRef.current.enqueue(data);
           setDiagnosticsState((previous) =>
             collectDiagnosticsSnapshot(previous, {
               enabled: debugEnabledRef.current,
@@ -203,6 +217,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
             return;
           }
 
+          outputBatcherRef.current.flush();
           setConnected(false);
           wsRef.current = null;
 
@@ -255,6 +270,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
         setConnectionError(null);
 
         if (wsRef.current) {
+          outputBatcherRef.current.flush();
           intentionalCloseRef.current = true;
           closeReasonRef.current = "intentional";
           wsRef.current.close();
@@ -306,6 +322,8 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
         };
         setCoreReady(true);
         patchWideCharRendererWorkaround(terminal.bridge);
+        imeAnchorCleanupRef.current?.();
+        imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);
         syncDebugAdapter(terminal, debugEnabledRef.current);
 
         if (getReadyTransportStrategy(modeRef.current) === "manual") {
@@ -386,7 +404,12 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
     }, [coreType]);
 
     useEffect(() => {
+      const outputBatcher = outputBatcherRef.current;
+
       return () => {
+        imeAnchorCleanupRef.current?.();
+        imeAnchorCleanupRef.current = null;
+        outputBatcher.flush();
         intentionalCloseRef.current = true;
         closeReasonRef.current = "intentional";
         clearReconnectTimer();
