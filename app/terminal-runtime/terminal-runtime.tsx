@@ -29,6 +29,7 @@ import { getReadyTransportStrategy } from "./ready-transport-strategy";
 import { sendResizeControlMessage } from "./resize-control-message";
 import { buildTransportWebSocketUrl } from "./transport";
 import type { ConnectionStatus, TerminalRuntimeHandle, TerminalRuntimeProps } from "./types";
+import { patchWideCharRendererWorkaround } from "./wide-char-workaround";
 
 export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntimeProps>(
   function TerminalRuntime(
@@ -304,6 +305,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
           rows: terminal.rows,
         };
         setCoreReady(true);
+        patchWideCharRendererWorkaround(terminal.bridge);
         syncDebugAdapter(terminal, debugEnabledRef.current);
 
         if (getReadyTransportStrategy(modeRef.current) === "manual") {

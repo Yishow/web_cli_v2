@@ -10,6 +10,7 @@ import type { CoreType } from "./core-preference";
 import { BROWSER_SHELL_FILES, BROWSER_SHELL_GREETING } from "./browser-shell-files";
 import { TERMINAL_STYLE } from "./terminal-style";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
+import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
 interface BrowserShellProps {
   coreType: CoreType;
@@ -24,7 +25,8 @@ export function BrowserShell({ coreType, onTitleChange, className }: BrowserShel
   const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
   const [coreReady, setCoreReady] = useState(false);
 
-  const handleReady = useCallback(() => {
+  const handleReady = useCallback((terminal: { bridge: Parameters<typeof patchWideCharRendererWorkaround>[0] }) => {
+    patchWideCharRendererWorkaround(terminal.bridge);
     setCoreReady(true);
     onTitleChange?.("Demo Shell");
 

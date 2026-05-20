@@ -1,13 +1,9 @@
 import type { CSSProperties } from "react";
 
-export const TERMINAL_CJK_FONT_STACK = [
-  '"JetBrains Mono"',
+export const TERMINAL_FONT_STACK = [
   '"Menlo"',
   '"Consolas"',
   '"DejaVu Sans Mono"',
-  '"Noto Sans Mono CJK TC"',
-  '"Noto Sans Mono CJK SC"',
-  '"WenQuanYi Zen Hei Mono"',
   '"Courier New"',
   "monospace",
 ].join(", ");
@@ -17,5 +13,5 @@ type TerminalStyle = CSSProperties & {
 };
 
 export const TERMINAL_STYLE: TerminalStyle = {
-  "--term-font-family": TERMINAL_CJK_FONT_STACK,
+  "--term-font-family": TERMINAL_FONT_STACK,
 };
