@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createPtyClientMessageState,
   handlePtyClientMessage,
+  parseResizeMessage,
 } from "./pty-client-message";
 
 test("buffers input until the first resize can spawn the PTY", () => {
@@ -39,4 +40,12 @@ test("resizes an existing PTY without replaying buffered input", () => {
     cols: 80,
     rows: 24,
   });
+});
+
+test("parses resize control messages for transport reuse", () => {
+  assert.deepEqual(parseResizeMessage("\x1b[RESIZE:100;40]"), {
+    cols: 100,
+    rows: 40,
+  });
+  assert.equal(parseResizeMessage("pwd\r"), null);
 });

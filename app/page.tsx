@@ -1,10 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Terminal, useTerminal } from "@wterm/react";
-import type { TraceEntry } from "@wterm/dom";
-import { GhosttyCore } from "@wterm/ghostty";
-import type { TerminalCore } from "@wterm/core";
 
 import {
   CORE_CONFIG,
@@ -19,6 +15,24 @@ import {
   fetchSessions,
   type SessionInfo,
 } from "./session-management";
+import { AgentTerminal, type AgentTerminalHandle } from "./agent-terminal";
+import type { AgentStreamState } from "./agent-shell";
+import { BrowserShell } from "./browser-shell";
+import {
+  buildSshConnectPayload,
+  clearSshCredentials,
+  createEmptySshConfig,
+  type SshAuthMethod,
+} from "./ssh-mode";
+import { formatDocumentTitle, getHeaderTitle } from "./terminal-title";
+import { createDiagnosticsState } from "./terminal-runtime/diagnostics";
+import { TerminalRuntime } from "./terminal-runtime/terminal-runtime";
+import type {
+  ConnectionState,
+  DiagnosticsSnapshot,
+  TerminalMode,
+  TerminalRuntimeHandle,
+} from "./terminal-runtime/types";
 import {
   DEFAULT_THEME,
   getThemeMeta,
@@ -28,45 +42,30 @@ import {
   type ThemeId,
 } from "./themes";
 import {
-  formatReconnectFailureMessage,
-  formatReconnectedMessage,
-  formatReconnectProgressMessage,
-  getReconnectDelay,
-  MAX_RECONNECT_ATTEMPTS,
-} from "./reconnect";
-import {
-  formatDocumentTitle,
-  getHeaderTitle,
-  DEFAULT_HEADER_TITLE,
-} from "./terminal-title";
-import {
-  appendRingBuffer,
-  collectTraceLogs,
-  formatHexDump,
   getInitialDebugMode,
   isDebugToggleShortcut,
-  MAX_DEBUG_ENTRIES,
   readDebugMode,
   setDebugModeSearch,
-  syncDebugAdapter,
-  type DebugLog,
 } from "./debug-mode";
-import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-core";
 
 type DebugPanelTab = "escape" | "hex";
 
-interface HexEntry {
-  timestamp: number;
-  byteLength: number;
-  dump: string;
-}
-
 export default function WebCliV2() {
+  const [mode, setMode] = useState<TerminalMode>("local");
+  const [browserShellOpen, setBrowserShellOpen] = useState(false);
+  const [agentTerminalOpen, setAgentTerminalOpen] = useState(false);
+  const [agentPrompt, setAgentPrompt] = useState("Summarize the current shell architecture and upgrade boundaries.");
+  const [agentState, setAgentState] = useState<AgentStreamState>({
+    status: "idle",
+    errorMessage: null,
+    lastPrompt: null,
+  });
   const [sessionName, setSessionName] = useState("webcli-main");
+  const [sshConfig, setSshConfig] = useState(createEmptySshConfig);
   const [connected, setConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionState["status"]>("disconnected");
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [coreType, setCoreType] = useState<CoreType>(getInitialCorePreference);
-  const [ghosttyCore, setGhosttyCore] = useState<TerminalCore | null>(null);
-  const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -76,23 +75,19 @@ export default function WebCliV2() {
   );
   const [terminalTitle, setTerminalTitle] = useState("");
   const [debugMode, setDebugMode] = useState(getInitialDebugMode);
-  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
-  const [hexEntries, setHexEntries] = useState<HexEntry[]>([]);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot>(createDiagnosticsState);
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugPanelTab>("escape");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newSessionInput, setNewSessionInput] = useState("webcli-main");
 
-  const { ref, write } = useTerminal();
-  const wsRef = useRef<WebSocket | null>(null);
+  const runtimeRef = useRef<TerminalRuntimeHandle | null>(null);
+  const agentTerminalRef = useRef<AgentTerminalHandle | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectAttemptRef = useRef(0);
-  const intentionalCloseRef = useRef(false);
-  const connectionSessionRef = useRef(sessionName);
-  const openSocketRef = useRef<(targetSession: string) => void>(() => {});
-  const debugModeRef = useRef(debugMode);
-  const hexOffsetRef = useRef(0);
-  const lastTraceRef = useRef<TraceEntry | null>(null);
   const panelContentRef = useRef<HTMLDivElement | null>(null);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  const settingsBtnRef = useRef<HTMLButtonElement | null>(null);
+  const modeSwitchMountedRef = useRef(false);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -116,181 +111,14 @@ export default function WebCliV2() {
     }, 5000);
   }, [loadSessions, stopPolling]);
 
-  const clearReconnectTimer = useCallback(() => {
-    if (reconnectTimerRef.current !== null) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-  }, []);
-
-  const setReconnectState = useCallback((attempt: number) => {
-    reconnectAttemptRef.current = attempt;
-    setReconnectAttempt(attempt);
-  }, []);
-
-  const scheduleReconnect = useCallback((attempt: number) => {
-    if (attempt > MAX_RECONNECT_ATTEMPTS) {
-      clearReconnectTimer();
-      setReconnectState(0);
-      write(formatReconnectFailureMessage());
-      return;
-    }
-
-    const delay = getReconnectDelay(attempt);
-    setReconnectState(attempt);
-    write(formatReconnectProgressMessage(attempt, delay));
-    clearReconnectTimer();
-    reconnectTimerRef.current = setTimeout(() => {
-      openSocketRef.current(connectionSessionRef.current);
-    }, delay);
-  }, [clearReconnectTimer, setReconnectState, write]);
-
-  const openSocket = useCallback((targetSession: string) => {
-    connectionSessionRef.current = targetSession;
-
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${proto}//${window.location.host}/api/terminal?session=${encodeURIComponent(targetSession)}`;
-
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      if (wsRef.current !== ws) {
-        return;
-      }
-
-      const didReconnect = reconnectAttemptRef.current > 0;
-
-      setConnected(true);
-      clearReconnectTimer();
-      setReconnectState(0);
-      intentionalCloseRef.current = false;
-      if (didReconnect) {
-        write(formatReconnectedMessage());
-      }
-      console.log("[wterm] Connected to tmux session:", targetSession);
-      void loadSessions();
-    };
-
-    ws.onmessage = (event: MessageEvent) => {
-      if (wsRef.current === ws) {
-        const data = event.data as string;
-        const terminal = ref.current?.instance ?? null;
-
-        if (debugModeRef.current) {
-          syncDebugAdapter(terminal, true);
-        }
-
-        write(data);
-
-        if (debugModeRef.current && terminal?.debug) {
-          const timestamp = Date.now();
-          const dump = formatHexDump(data, hexOffsetRef.current);
-          const traces = terminal.debug.traces;
-          const lastTraceIndex = lastTraceRef.current ? traces.lastIndexOf(lastTraceRef.current) : -1;
-          const { logs } = collectTraceLogs(traces, Math.max(lastTraceIndex + 1, 0), timestamp);
-
-          hexOffsetRef.current = dump.nextOffset;
-          lastTraceRef.current = traces.at(-1) ?? null;
-
-          setHexEntries((previous) =>
-            appendRingBuffer(
-              previous,
-              {
-                timestamp,
-                byteLength: dump.byteLength,
-                dump: dump.dump,
-              },
-              MAX_DEBUG_ENTRIES,
-            ),
-          );
-
-          if (logs.length > 0) {
-            setDebugLogs((previous) =>
-              logs.reduce((entries, log) => appendRingBuffer(entries, log, MAX_DEBUG_ENTRIES), previous),
-            );
-          }
-        }
-      }
-    };
-
-    ws.onclose = () => {
-      if (wsRef.current !== ws) {
-        return;
-      }
-
-      setConnected(false);
-      wsRef.current = null;
-      void loadSessions();
-
-      if (intentionalCloseRef.current) {
-        write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-        intentionalCloseRef.current = false;
-        setReconnectState(0);
-        return;
-      }
-
-      scheduleReconnect(reconnectAttemptRef.current + 1);
-    };
-
-    ws.onerror = () => {
-      if (wsRef.current === ws) {
-        setConnected(false);
-      }
-    };
-  }, [clearReconnectTimer, loadSessions, ref, scheduleReconnect, setReconnectState, write]);
-
-  const connect = useCallback((targetSession?: string) => {
-    const nextSession = targetSession ?? sessionName;
-
-    clearReconnectTimer();
-    setReconnectState(0);
-
-    if (targetSession && targetSession !== sessionName) {
-      setSessionName(targetSession);
-    }
-
-    if (wsRef.current) {
-      intentionalCloseRef.current = true;
-      wsRef.current.close();
-    }
-
-    intentionalCloseRef.current = false;
-    openSocket(nextSession);
-  }, [clearReconnectTimer, openSocket, sessionName, setReconnectState]);
-
-  const handleData = useCallback((data: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(data);
-    }
-  }, []);
-
-  const handleResize = useCallback((cols: number, rows: number) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(`\x1b[RESIZE:${cols};${rows}]`);
-    }
-  }, []);
-
-  const handleReady = useCallback(() => {
-    syncDebugAdapter(ref.current?.instance ?? null, debugModeRef.current);
-
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      connect();
-    }
-  }, [connect, ref]);
-
   const handleCoreChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextCore = normalizeCorePreference(event.currentTarget.value) ?? "builtin";
-
     window.localStorage.setItem(CORE_PREFERENCE_KEY, nextCore);
-    setGhosttyCore(null);
-    setGhosttyLoadError(null);
     setCoreType(nextCore);
   }, []);
 
   const handleThemeChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextTheme = event.currentTarget.value as ThemeId;
-
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
     setThemeId(nextTheme);
   }, []);
@@ -299,48 +127,195 @@ export default function WebCliV2() {
     setTerminalTitle(title);
   }, []);
 
-  const applyDebugMode = useCallback(
-    (next: boolean) => {
-      const url = new URL(window.location.href);
-      url.search = setDebugModeSearch(url.search, next);
-      window.history.replaceState({}, "", url.toString());
-
-      debugModeRef.current = next;
-      hexOffsetRef.current = 0;
-      lastTraceRef.current = null;
-      setDebugMode(next);
-      setDebugLogs([]);
-      setHexEntries([]);
-      setPanelExpanded(false);
-      setActiveDebugTab("escape");
-      syncDebugAdapter(ref.current?.instance ?? null, next);
-    },
-    [ref],
-  );
+  const applyDebugMode = useCallback((next: boolean) => {
+    const url = new URL(window.location.href);
+    url.search = setDebugModeSearch(url.search, next);
+    window.history.replaceState({}, "", url.toString());
+    setDebugMode(next);
+    setDiagnostics(createDiagnosticsState());
+    setPanelExpanded(false);
+    setActiveDebugTab("escape");
+  }, []);
 
   const toggleDebug = useCallback(() => {
     applyDebugMode(!debugMode);
   }, [applyDebugMode, debugMode]);
 
   const handleSwitchSession = useCallback((name: string) => {
-    connect(name);
-  }, [connect]);
+    setSessionName(name);
+    setNewSessionInput(name);
+    runtimeRef.current?.connect(name);
+  }, []);
 
-  const handleDelete = useCallback(async (name: string) => {
-    const success = await deleteSessionApi(name);
-
-    if (success) {
-      setSessions((previous) => previous.filter((session) => session.name !== name));
-      if (name === sessionName) {
-        intentionalCloseRef.current = true;
-        clearReconnectTimer();
-        setReconnectState(0);
-        wsRef.current?.close();
-      }
+  const handleModeChange = useCallback((nextMode: TerminalMode) => {
+    if (nextMode === mode) {
+      return;
     }
 
+    setSidebarOpen(false);
     setDeleteConfirm(null);
-  }, [clearReconnectTimer, sessionName, setReconnectState]);
+    setBrowserShellOpen(false);
+    setAgentTerminalOpen(false);
+    setAgentState({
+      status: "idle",
+      errorMessage: null,
+      lastPrompt: null,
+    });
+    setConnected(false);
+    setReconnectAttempt(0);
+    setConnectionError(null);
+    setConnectionStatus("disconnected");
+
+    if (nextMode === "ssh") {
+      setSshConfig(clearSshCredentials(sshConfig));
+    }
+
+    setMode(nextMode);
+  }, [mode, sshConfig]);
+
+  const handleNewSessionConnect = useCallback(() => {
+    const name = newSessionInput.trim();
+    if (!name) return;
+    handleSwitchSession(name);
+  }, [newSessionInput, handleSwitchSession]);
+
+  const handleOpenBrowserShell = useCallback(() => {
+    runtimeRef.current?.disconnect();
+    setSidebarOpen(false);
+    setDeleteConfirm(null);
+    setAgentTerminalOpen(false);
+    setAgentState({
+      status: "idle",
+      errorMessage: null,
+      lastPrompt: null,
+    });
+    setConnected(false);
+    setReconnectAttempt(0);
+    setConnectionError(null);
+    setConnectionStatus("disconnected");
+    setBrowserShellOpen(true);
+  }, []);
+
+  const handleCloseBrowserShell = useCallback(() => {
+    setBrowserShellOpen(false);
+    setConnectionError(null);
+    setConnectionStatus("disconnected");
+    setConnected(false);
+    setReconnectAttempt(0);
+    setTerminalTitle("");
+
+    if (mode === "local") {
+      window.setTimeout(() => {
+        runtimeRef.current?.connect(sessionName);
+      }, 0);
+    }
+  }, [mode, sessionName]);
+
+  const handleOpenAgentTerminal = useCallback(() => {
+    runtimeRef.current?.disconnect();
+    setSidebarOpen(false);
+    setDeleteConfirm(null);
+    setBrowserShellOpen(false);
+    setConnected(false);
+    setReconnectAttempt(0);
+    setConnectionError(null);
+    setConnectionStatus("disconnected");
+    setAgentState({
+      status: "idle",
+      errorMessage: null,
+      lastPrompt: null,
+    });
+    setAgentTerminalOpen(true);
+  }, []);
+
+  const handleCloseAgentTerminal = useCallback(() => {
+    setAgentTerminalOpen(false);
+    setAgentState({
+      status: "idle",
+      errorMessage: null,
+      lastPrompt: null,
+    });
+    setTerminalTitle("");
+
+    if (mode === "local") {
+      window.setTimeout(() => {
+        runtimeRef.current?.connect(sessionName);
+      }, 0);
+    }
+  }, [mode, sessionName]);
+
+  const handleStartAgentStream = useCallback(async () => {
+    await agentTerminalRef.current?.start(agentPrompt);
+  }, [agentPrompt]);
+
+  const handleAbortAgentStream = useCallback(() => {
+    agentTerminalRef.current?.abort();
+  }, []);
+
+  const handleRetryAgentStream = useCallback(async () => {
+    await agentTerminalRef.current?.retry();
+  }, []);
+
+  const handleDisconnect = useCallback(() => {
+    runtimeRef.current?.disconnect();
+
+    if (mode === "ssh") {
+      setSshConfig(clearSshCredentials(sshConfig));
+    }
+  }, [mode, sshConfig]);
+
+  const handleSshFieldChange = useCallback(
+    (field: "host" | "port" | "username" | "password" | "privateKey", value: string) => {
+      setConnectionError(null);
+      setConnectionStatus((previous) => (previous === "error" ? "disconnected" : previous));
+      setSshConfig((previous) => ({
+        ...previous,
+        [field]: value,
+      }));
+    },
+    [],
+  );
+
+  const handleSshAuthChange = useCallback((authMethod: SshAuthMethod) => {
+    setConnectionError(null);
+    setConnectionStatus((previous) => (previous === "error" ? "disconnected" : previous));
+    setSshConfig((previous) => ({
+      ...previous,
+      authMethod,
+      password: authMethod === "password" ? previous.password : "",
+      privateKey: authMethod === "privateKey" ? previous.privateKey : "",
+    }));
+  }, []);
+
+  const handleSshConnect = useCallback(() => {
+    if (!buildSshConnectPayload(sshConfig)) {
+      setConnectionStatus("error");
+      setConnectionError("請完整填寫 SSH 連線資訊");
+      return;
+    }
+
+    runtimeRef.current?.connect();
+  }, [sshConfig]);
+
+  const handleClearSshForm = useCallback(() => {
+    setConnectionError(null);
+    setConnectionStatus("disconnected");
+    setSshConfig(clearSshCredentials(sshConfig));
+  }, [sshConfig]);
+
+  const handleDelete = useCallback(
+    async (name: string) => {
+      const success = await deleteSessionApi(name);
+      if (success) {
+        setSessions((previous) => previous.filter((session) => session.name !== name));
+        if (name === sessionName) {
+          runtimeRef.current?.disconnect();
+        }
+      }
+      setDeleteConfirm(null);
+    },
+    [sessionName],
+  );
 
   const handleRefreshSessions = useCallback(() => {
     void loadSessions();
@@ -349,65 +324,51 @@ export default function WebCliV2() {
     }
   }, [loadSessions, sidebarOpen, startPolling]);
 
-  const currentTheme = getThemeMeta(themeId ?? DEFAULT_THEME);
-  const terminalCoreProps = getTerminalCoreProps(coreType, ghosttyCore);
+  const handleConnectionStateChange = useCallback(
+    (state: ConnectionState) => {
+      setConnectionStatus(state.status);
+      setConnected(state.connected);
+      setReconnectAttempt(state.reconnectAttempt);
+      setConnectionError(state.errorMessage);
 
-  useEffect(() => {
-    openSocketRef.current = openSocket;
-  }, [openSocket]);
+      if (state.connected && mode === "local") {
+        void loadSessions();
+      }
+    },
+    [loadSessions, mode],
+  );
+
+  const handleDiagnosticsChange = useCallback((snapshot: DiagnosticsSnapshot) => {
+    setDiagnostics(snapshot);
+  }, []);
+
+  const currentTheme = getThemeMeta(themeId ?? DEFAULT_THEME);
+  const sshConnectReady = buildSshConnectPayload(sshConfig) !== null;
+  const sshTargetLabel = sshConfig.host
+    ? `${sshConfig.username || "user"}@${sshConfig.host}:${sshConfig.port || "22"}`
+    : "SSH";
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const savedCore = loadCorePreference(window.localStorage);
       setCoreType((current) => (current === savedCore ? current : savedCore));
     }, 0);
-
-    return () => {
-      clearTimeout(timer);
-    };
+    return () => { clearTimeout(timer); };
   }, []);
-
-  useEffect(() => {
-    if (coreType !== "ghostty") {
-      return;
-    }
-
-    let cancelled = false;
-
-    void GhosttyCore.load(getGhosttyLoadOptions())
-      .then((core) => {
-        if (!cancelled) {
-          setGhosttyCore(core);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        const message = error instanceof Error ? error.message : String(error);
-        console.error("[ghostty] Failed to load Ghostty core:", message);
-        setGhosttyLoadError(message);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [coreType]);
 
   useEffect(() => {
     document.title = formatDocumentTitle(terminalTitle);
   }, [terminalTitle]);
 
   useEffect(() => {
-    const nextDebugMode = readDebugMode(window.location.search);
-
-    if (nextDebugMode !== debugModeRef.current) {
-      applyDebugMode(nextDebugMode);
-    } else if (nextDebugMode) {
-      syncDebugAdapter(ref.current?.instance ?? null, true);
-    }
-  }, [applyDebugMode, ref]);
+    const timer = window.setTimeout(() => {
+      const nextDebugMode = readDebugMode(window.location.search);
+      if (nextDebugMode !== debugMode) {
+        applyDebugMode(nextDebugMode);
+      }
+    }, 0);
+    return () => { clearTimeout(timer); };
+  }, [applyDebugMode, debugMode]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -416,321 +377,703 @@ export default function WebCliV2() {
         toggleDebug();
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => { window.removeEventListener("keydown", handleKeyDown); };
   }, [toggleDebug]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadSessions();
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-    };
+    const timer = window.setTimeout(() => { void loadSessions(); }, 0);
+    return () => { clearTimeout(timer); };
   }, [loadSessions]);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      intentionalCloseRef.current = true;
-      clearReconnectTimer();
-    };
+    if (mode !== "local") {
+      stopPolling();
+      return stopPolling;
+    }
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [clearReconnectTimer]);
-
-  useEffect(() => {
     if (sidebarOpen) {
-      const timer = window.setTimeout(() => {
-        void loadSessions();
-      }, 0);
+      const timer = window.setTimeout(() => { void loadSessions(); }, 0);
       startPolling();
-
       return () => {
         clearTimeout(timer);
         stopPolling();
       };
-    } else {
-      stopPolling();
     }
 
+    stopPolling();
     return stopPolling;
-  }, [loadSessions, sidebarOpen, startPolling, stopPolling]);
+  }, [loadSessions, mode, sidebarOpen, startPolling, stopPolling]);
 
   useEffect(() => {
-    return () => {
-      clearReconnectTimer();
-    };
-  }, [clearReconnectTimer]);
-
-  useEffect(() => {
-    if (!debugMode || !panelExpanded || !panelContentRef.current) {
+    if (!modeSwitchMountedRef.current) {
+      modeSwitchMountedRef.current = true;
       return;
     }
 
+    runtimeRef.current?.disconnect();
+
+    if (mode === "local") {
+      const timer = window.setTimeout(() => {
+        runtimeRef.current?.connect(sessionName);
+      }, 0);
+      return () => { clearTimeout(timer); };
+    }
+
+    return undefined;
+  }, [mode, sessionName]);
+
+  useEffect(() => {
+    if (!debugMode || !panelExpanded || !panelContentRef.current) return;
     panelContentRef.current.scrollTop = panelContentRef.current.scrollHeight;
-  }, [activeDebugTab, debugLogs, debugMode, hexEntries, panelExpanded]);
+  }, [activeDebugTab, debugMode, diagnostics.hexEntries, diagnostics.logs, panelExpanded]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        settingsRef.current?.contains(e.target as Node) ||
+        settingsBtnRef.current?.contains(e.target as Node)
+      ) {
+        return;
+      }
+      setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => { document.removeEventListener("mousedown", handler); };
+  }, [settingsOpen]);
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-950">
-      <header className="flex items-center justify-between border-b border-white/10 bg-zinc-900/50 px-4 py-2 text-sm">
-        <div className="flex items-center gap-3">
-          <span className="font-semibold text-emerald-400">web_cli_v2</span>
-          <span className="text-white/40">•</span>
-          <span className="text-white/60 text-xs">wterm + tmux</span>
-          <span className="text-white/40">•</span>
-          <span
-            className={`max-w-48 truncate font-mono text-xs ${
-              terminalTitle ? "text-white/70" : "text-white/30"
-            }`}
-            title={terminalTitle || DEFAULT_HEADER_TITLE}
-          >
-            {getHeaderTitle(terminalTitle)}
+    <div className="flex h-screen flex-col bg-[#08090d]">
+      <header className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">
+            web_cli_v2
           </span>
-          <span className="text-white/40">•</span>
-          <button
-            onClick={() => setSidebarOpen((open) => !open)}
-            className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
-              sidebarOpen
-                ? "bg-zinc-700 text-white"
-                : "bg-zinc-800 text-white/60 hover:bg-zinc-700 hover:text-white"
-            }`}
-          >
-            <span>Sessions</span>
-            <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
-              {sessions.length}
+          <div className="h-3 w-px bg-white/10" />
+          <div className="flex items-center gap-1 rounded border border-white/10 bg-black/20 p-0.5">
+            <button
+              onClick={() => handleModeChange("local")}
+              className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                mode === "local"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : "text-white/35 hover:text-white/60"
+              }`}
+            >
+              Local
+            </button>
+            <button
+              onClick={() => handleModeChange("ssh")}
+              className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                mode === "ssh"
+                  ? "bg-cyan-500/15 text-cyan-300"
+                  : "text-white/35 hover:text-white/60"
+              }`}
+            >
+              SSH
+            </button>
+          </div>
+          {browserShellOpen ? (
+            <>
+              <div className="h-3 w-px bg-white/10" />
+              <span className="font-mono text-[10px] text-cyan-200/60">Demo Shell</span>
+            </>
+          ) : agentTerminalOpen ? (
+            <>
+              <div className="h-3 w-px bg-white/10" />
+              <span className="font-mono text-[10px] text-fuchsia-200/60">Agent Stream</span>
+            </>
+          ) : mode === "local" ? (
+            <>
+              <div className="h-3 w-px bg-white/10" />
+              <button
+                onClick={() => setSidebarOpen((open) => !open)}
+                className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
+                  sidebarOpen
+                    ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                    : "text-white/40 hover:bg-white/5 hover:text-white/60"
+                }`}
+              >
+                <span>Sessions</span>
+                {sessions.length > 0 && (
+                  <span className="rounded-full bg-white/10 px-1 text-[9px] leading-4 text-white/50">
+                    {sessions.length}
+                  </span>
+                )}
+              </button>
+              <div className="h-3 w-px bg-white/10" />
+              <span className="font-mono text-[10px] text-white/30">{sessionName}</span>
+            </>
+          ) : (
+            <>
+              <div className="h-3 w-px bg-white/10" />
+              <span className="font-mono text-[10px] text-cyan-200/60">{sshTargetLabel}</span>
+            </>
+          )}
+        </div>
+
+        <div className="flex-1 px-6 text-center">
+          {terminalTitle && (
+            <span className="inline-block max-w-xs truncate font-mono text-[10px] text-white/20">
+              {getHeaderTitle(terminalTitle)}
             </span>
-          </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="core-select" className="text-xs text-white/40">
-              Core
-            </label>
-            <select
-              id="core-select"
-              value={coreType}
-              onChange={handleCoreChange}
-              className="cursor-pointer rounded-md border border-white/20 bg-zinc-800 px-2 py-1 text-xs font-mono focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="builtin">Built-in (~12KB)</option>
-              <option value="ghostty">Ghostty (~400KB)</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="theme-select" className="text-xs text-white/40">
-              Theme
-            </label>
-            <select
-              id="theme-select"
-              value={themeId}
-              onChange={handleThemeChange}
-              className="cursor-pointer rounded-md border border-white/20 bg-zinc-800 px-2 py-1 text-xs font-mono focus:border-emerald-500 focus:outline-none"
-            >
-              {THEMES.map((theme) => (
-                <option key={theme.id} value={theme.id}>
-                  {theme.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <input
-            type="text"
-            value={sessionName}
-            onChange={(e) => setSessionName(e.target.value)}
-            className="rounded-md bg-zinc-800 px-3 py-1 text-xs font-mono border border-white/20 w-56 focus:outline-none focus:border-emerald-500"
-            placeholder="tmux session name"
-          />
           <button
-            onClick={() => connect()}
-            disabled={connected}
-            className="rounded-md bg-emerald-600 px-4 py-1 text-xs font-medium hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-white/50 transition-colors"
+            onClick={agentTerminalOpen ? handleCloseAgentTerminal : handleOpenAgentTerminal}
+            className={`rounded px-2 py-1 text-[10px] transition-colors ${
+              agentTerminalOpen
+                ? "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/20"
+                : "text-fuchsia-200/50 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
+            }`}
+            title="Agent output terminal"
           >
-            {connected ? "已連線" : "連線 / 重新連線"}
+            {agentTerminalOpen ? "Close Agent" : "Agent View"}
           </button>
-        </div>
 
-        <div className="flex items-center gap-2">
+          <div className="h-3 w-px bg-white/10" />
+
+          <button
+            onClick={browserShellOpen ? handleCloseBrowserShell : handleOpenBrowserShell}
+            className={`rounded px-2 py-1 text-[10px] transition-colors ${
+              browserShellOpen
+                ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/20"
+                : "text-cyan-200/50 hover:bg-cyan-500/10 hover:text-cyan-200"
+            }`}
+            title="Browser-only demo shell"
+          >
+            {browserShellOpen ? "Close Demo" : "Try Demo Shell"}
+          </button>
+
+          <div className="h-3 w-px bg-white/10" />
+
+          <div className="relative">
+            <button
+              ref={settingsBtnRef}
+              onClick={() => setSettingsOpen((o) => !o)}
+              className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                settingsOpen
+                  ? "bg-white/10 text-white/70"
+                  : "text-white/30 hover:bg-white/5 hover:text-white/60"
+              }`}
+              title="設定"
+            >
+              ⚙ 設定
+            </button>
+            {settingsOpen && (
+              <div
+                ref={settingsRef}
+                className="absolute right-0 top-full z-50 mt-1.5 w-60 rounded-lg border border-white/10 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-sm"
+              >
+                <div className="mb-2.5 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
+                  偏好設定
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <label className="w-16 shrink-0 text-[10px] text-white/45">Core</label>
+                    <select
+                      value={coreType}
+                      onChange={handleCoreChange}
+                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                    >
+                      <option value="builtin">Built-in (~12KB)</option>
+                      <option value="ghostty">Ghostty (~400KB)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="w-16 shrink-0 text-[10px] text-white/45">Theme</label>
+                    <select
+                      value={themeId}
+                      onChange={handleThemeChange}
+                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                    >
+                      {THEMES.map((theme) => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="pt-1 text-[9px] text-white/20">
+                    Core: {CORE_CONFIG[coreType].label} ({CORE_CONFIG[coreType].size})
+                    {" · "}Theme: {currentTheme.label}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-3 w-px bg-white/10" />
+
           <button
             onClick={toggleDebug}
-            className={`rounded-md px-2 py-0.5 text-xs transition-colors ${
+            className={`rounded px-2 py-1 text-[10px] transition-colors ${
               debugMode
-                ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
-                : "bg-white/10 text-white/40 hover:bg-white/15 hover:text-white/60"
+                ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                : "text-white/30 hover:bg-white/5 hover:text-white/60"
             }`}
             title="Debug Mode (Ctrl+Shift+D)"
           >
             {debugMode ? "Debug ON" : "Debug"}
           </button>
-          <div
-            className={`rounded px-2 py-0.5 text-xs ${
-              connected
-                ? "bg-emerald-500/20 text-emerald-400"
-                : reconnectAttempt > 0
-                  ? "animate-pulse bg-yellow-500/20 text-yellow-400"
-                  : "bg-white/10 text-white/40"
-            }`}
-          >
-            {connected ? "● 已連線" : reconnectAttempt > 0 ? "◌ 重連中..." : "○ 未連線"}
-          </div>
+
+          <div className="h-3 w-px bg-white/10" />
+
+          {browserShellOpen ? (
+            <div className="flex items-center gap-1.5 text-[10px] text-cyan-300/80">
+              <span className="text-[8px]">◇</span>
+              <span>browser-only · no backend · no persistence</span>
+            </div>
+          ) : agentTerminalOpen ? (
+            agentState.status === "error" && agentState.errorMessage ? (
+              <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+                <span className="text-[8px]">▲</span>
+                <span className="max-w-44 truncate">{agentState.errorMessage}</span>
+              </div>
+            ) : agentState.status === "loading" || agentState.status === "streaming" ? (
+              <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-fuchsia-300">
+                <span className="text-[8px]">◌</span>
+                <span>{agentState.status === "loading" ? "Agent 準備中..." : "Agent streaming..."}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-[10px] text-fuchsia-300/80">
+                <span className="text-[8px]">◇</span>
+                <span>read-mostly terminal · dedicated endpoint</span>
+              </div>
+            )
+          ) : connectionStatus === "error" && connectionError ? (
+            <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+              <span className="text-[8px]">▲</span>
+              <span className="max-w-44 truncate">{connectionError}</span>
+            </div>
+          ) : connected ? (
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+              <span className="text-[8px]">●</span>
+              <span>已連線</span>
+            </div>
+          ) : connectionStatus === "connecting" || reconnectAttempt > 0 ? (
+            <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-yellow-400">
+              <span className="text-[8px]">◌</span>
+              <span>{mode === "ssh" ? "SSH 連線中..." : "重連中..."}</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                if (mode === "ssh") {
+                  handleSshConnect();
+                  return;
+                }
+
+                runtimeRef.current?.connect();
+              }}
+              className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-white/30 transition-colors hover:bg-emerald-700/20 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+              title="點擊重新連線"
+              disabled={mode === "ssh" && !sshConnectReady}
+            >
+              <span className="text-[8px]">○</span>
+              <span>{mode === "ssh" ? "SSH — 點擊連線" : "未連線 — 點擊連線"}</span>
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
+        {!browserShellOpen && !agentTerminalOpen && mode === "local" && sidebarOpen && (
+          <div
+            className="absolute inset-0 z-30"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         <div
-          className={`overflow-hidden border-r border-white/10 bg-zinc-900/80 transition-all duration-300 ${
-            sidebarOpen ? "w-72" : "w-0 border-r-0"
+          className={`absolute bottom-0 left-0 top-0 z-40 w-72 border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200 ${
+            !browserShellOpen && !agentTerminalOpen && mode === "local" && sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          {sidebarOpen ? (
-            <div className="flex h-full w-72 flex-col">
-              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-                <span className="text-sm font-semibold text-white/80">Sessions</span>
+          <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2.5">
+              <span className="text-[9px] font-semibold tracking-widest text-white/35 uppercase">
+                Sessions
+              </span>
+              <button
+                onClick={handleRefreshSessions}
+                className="text-sm leading-none text-white/25 transition-colors hover:text-white/60"
+                title="重新整理"
+              >
+                ↻
+              </button>
+            </div>
+
+            <div className="border-b border-white/[0.06] px-3 py-3">
+              <div className="mb-1.5 text-[9px] uppercase tracking-wider text-white/25">
+                連線目標
+              </div>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={newSessionInput}
+                  onChange={(e) => setNewSessionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleNewSessionConnect();
+                  }}
+                  className="min-w-0 flex-1 rounded border border-white/10 bg-zinc-900 px-2 py-1 text-[10px] font-mono text-white/75 placeholder-white/20 focus:border-emerald-500/40 focus:outline-none"
+                  placeholder="tmux session name"
+                />
                 <button
-                  onClick={handleRefreshSessions}
-                  className="text-sm text-white/40 hover:text-white/80"
-                  title="重新整理"
+                  onClick={handleNewSessionConnect}
+                  className="rounded bg-emerald-700/70 px-2.5 py-1 text-[10px] font-medium text-emerald-100 transition-colors hover:bg-emerald-600/70"
                 >
-                  ↻
+                  連線
                 </button>
               </div>
+              {connected ? (
+                <button
+                  onClick={handleDisconnect}
+                  className="mt-1.5 w-full rounded border border-white/10 py-1 text-[10px] text-white/30 transition-colors hover:border-red-500/30 hover:text-red-400"
+                >
+                  斷線
+                </button>
+              ) : null}
+            </div>
 
-              <div className="flex-1 overflow-y-auto">
-                {sessions.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-xs text-white/30">
-                    尚無 session
-                    <br />
-                    請在上方輸入名稱建立新 session
+            <div className="flex-1 overflow-y-auto">
+              {sessions.length === 0 ? (
+                <div className="px-3 py-10 text-center text-[10px] leading-6 text-white/20">
+                  尚無 session
+                  <br />
+                  輸入名稱後點「連線」建立新 session
+                </div>
+              ) : (
+                <div>
+                  <div className="px-3 pb-1 pt-2.5 text-[9px] uppercase tracking-wider text-white/20">
+                    現有 Sessions
                   </div>
-                ) : (
-                  sessions.map((session) => (
+                  {sessions.map((session) => (
                     <div
                       key={session.name}
-                      className={`group flex cursor-pointer items-center gap-2 border-b border-white/5 px-3 py-2 hover:bg-zinc-800/50 ${
+                      className={`group relative flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors hover:bg-white/[0.04] ${
                         session.name === sessionName && connected
-                          ? "border-l-2 border-l-emerald-500 bg-zinc-800"
+                          ? "bg-emerald-500/[0.06]"
                           : ""
                       }`}
                       onClick={() => handleSwitchSession(session.name)}
                     >
-                      <span className={`text-xs ${session.attached ? "text-emerald-400" : "text-zinc-600"}`}>
+                      {session.name === sessionName && connected ? (
+                        <div className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-emerald-500" />
+                      ) : null}
+                      <span
+                        className={`text-[8px] ${
+                          session.attached ? "text-emerald-400" : "text-zinc-600"
+                        }`}
+                      >
                         ●
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-mono text-white/80">
+                        <div className="truncate font-mono text-[10px] text-white/70">
                           {session.name}
                         </div>
-                        <div className="text-[10px] text-white/30">
-                          {new Date(session.created * 1000).toLocaleString()} · {session.windows} window
-                          {session.windows === 1 ? "" : "s"}
+                        <div className="text-[9px] text-white/25">
+                          {new Date(session.created * 1000).toLocaleString()} ·{" "}
+                          {session.windows}w
                         </div>
                       </div>
                       <button
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setDeleteConfirm(session.name);
                         }}
-                        className="text-xs text-white/30 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                        className="text-[10px] text-white/20 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
                         title="刪除 session"
                       >
                         ✕
                       </button>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : null}
+          </div>
         </div>
 
+        {!browserShellOpen && !agentTerminalOpen && mode === "ssh" ? (
+          <div className="absolute inset-x-4 top-4 z-20 rounded-xl border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-semibold tracking-widest text-cyan-300 uppercase">
+                  SSH Connection
+                </div>
+                <div className="mt-1 text-[10px] text-white/35">
+                  僅保留於目前頁面生命週期，不會寫入 localStorage 或後端。
+                </div>
+              </div>
+              {connected ? (
+                <button
+                  onClick={handleDisconnect}
+                  className="rounded border border-white/10 px-3 py-1.5 text-[10px] text-white/50 transition-colors hover:border-red-500/30 hover:text-red-400"
+                >
+                  中斷 SSH
+                </button>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-12 gap-2">
+              <input
+                type="text"
+                value={sshConfig.host}
+                onChange={(event) => handleSshFieldChange("host", event.currentTarget.value)}
+                className="col-span-4 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                placeholder="host"
+              />
+              <input
+                type="text"
+                value={sshConfig.port}
+                onChange={(event) => handleSshFieldChange("port", event.currentTarget.value)}
+                className="col-span-2 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                placeholder="22"
+              />
+              <input
+                type="text"
+                value={sshConfig.username}
+                onChange={(event) => handleSshFieldChange("username", event.currentTarget.value)}
+                className="col-span-3 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                placeholder="username"
+              />
+              <div className="col-span-3 flex items-center rounded border border-white/10 bg-zinc-900 p-0.5">
+                <button
+                  onClick={() => handleSshAuthChange("password")}
+                  className={`flex-1 rounded px-2 py-1 text-[10px] transition-colors ${
+                    sshConfig.authMethod === "password"
+                      ? "bg-cyan-500/15 text-cyan-200"
+                      : "text-white/35 hover:text-white/65"
+                  }`}
+                >
+                  Password
+                </button>
+                <button
+                  onClick={() => handleSshAuthChange("privateKey")}
+                  className={`flex-1 rounded px-2 py-1 text-[10px] transition-colors ${
+                    sshConfig.authMethod === "privateKey"
+                      ? "bg-cyan-500/15 text-cyan-200"
+                      : "text-white/35 hover:text-white/65"
+                  }`}
+                >
+                  Private Key
+                </button>
+              </div>
+            </div>
+
+            {sshConfig.authMethod === "password" ? (
+              <input
+                type="password"
+                value={sshConfig.password}
+                onChange={(event) => handleSshFieldChange("password", event.currentTarget.value)}
+                className="mt-2 w-full rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                placeholder="password"
+              />
+            ) : (
+              <textarea
+                value={sshConfig.privateKey}
+                onChange={(event) => handleSshFieldChange("privateKey", event.currentTarget.value)}
+                className="mt-2 h-28 w-full rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
+                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+              />
+            )}
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="text-[10px] text-white/25">
+                {connectionError && connectionStatus === "error"
+                  ? connectionError
+                  : "使用受信任環境；disconnect 或重新整理後不會保留 credential。"}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleClearSshForm}
+                  className="rounded border border-white/10 px-3 py-1.5 text-[10px] text-white/45 transition-colors hover:border-white/20 hover:text-white/70"
+                >
+                  清空
+                </button>
+                <button
+                  onClick={handleSshConnect}
+                  disabled={!sshConnectReady || connectionStatus === "connecting"}
+                  className="rounded bg-cyan-600/80 px-3 py-1.5 text-[10px] font-medium text-cyan-50 transition-colors hover:bg-cyan-500/80 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  連線 SSH
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {browserShellOpen ? (
+          <div className="absolute inset-x-4 top-4 z-20 rounded-xl border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-semibold tracking-widest text-cyan-300 uppercase">
+                  Demo / Fallback Shell
+                </div>
+                <div className="mt-1 text-[10px] text-white/35">
+                  Browser-only，沒有 backend transport，也不會保留任何檔案或輸入。
+                </div>
+              </div>
+              <button
+                onClick={handleCloseBrowserShell}
+                className="rounded border border-white/10 px-3 py-1.5 text-[10px] text-white/50 transition-colors hover:border-white/20 hover:text-white/75"
+              >
+                返回工作 shell
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {agentTerminalOpen ? (
+          <div className="absolute inset-x-4 top-4 z-20 rounded-xl border border-fuchsia-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-semibold tracking-widest text-fuchsia-300 uppercase">
+                  Agent Output Terminal
+                </div>
+                <div className="mt-1 text-[10px] text-white/35">
+                  專用 `/api/agent-stream` Markdown stream；這不是 tmux session，也不是 SSH shell。
+                </div>
+              </div>
+              <button
+                onClick={handleCloseAgentTerminal}
+                className="rounded border border-white/10 px-3 py-1.5 text-[10px] text-white/50 transition-colors hover:border-white/20 hover:text-white/75"
+              >
+                返回工作 shell
+              </button>
+            </div>
+
+            <textarea
+              value={agentPrompt}
+              onChange={(event) => setAgentPrompt(event.currentTarget.value)}
+              className="h-24 w-full rounded border border-white/10 bg-zinc-900 px-3 py-2 text-[11px] text-white/80 placeholder-white/20 focus:border-fuchsia-500/40 focus:outline-none"
+              placeholder="Describe what you want the agent terminal to stream..."
+            />
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="text-[10px] text-white/25">
+                {agentState.status === "error" && agentState.errorMessage
+                  ? agentState.errorMessage
+                  : "Start / Abort / Retry are UI actions; Ctrl+C inside the terminal also aborts the stream."}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void handleRetryAgentStream()}
+                  disabled={!agentState.lastPrompt || agentState.status === "loading" || agentState.status === "streaming"}
+                  className="rounded border border-white/10 px-3 py-1.5 text-[10px] text-white/55 transition-colors hover:border-white/20 hover:text-white/80 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={handleAbortAgentStream}
+                  disabled={agentState.status !== "loading" && agentState.status !== "streaming"}
+                  className="rounded border border-white/10 px-3 py-1.5 text-[10px] text-white/55 transition-colors hover:border-red-500/30 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Abort
+                </button>
+                <button
+                  onClick={() => void handleStartAgentStream()}
+                  disabled={!agentPrompt.trim() || agentState.status === "loading" || agentState.status === "streaming"}
+                  className="rounded bg-fuchsia-600/80 px-3 py-1.5 text-[10px] font-medium text-fuchsia-50 transition-colors hover:bg-fuchsia-500/80 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Start Stream
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div
-          className={`flex-1 overflow-hidden ${currentTheme.cssClass} ${
-            debugMode ? "ring-1 ring-inset ring-amber-500/20" : ""
+          className={`absolute inset-0 overflow-hidden ${currentTheme.cssClass} ${
+            debugMode ? "ring-1 ring-inset ring-amber-500/15" : ""
           }`}
         >
-          {terminalCoreProps ? (
-            <Terminal
-              key={`terminal-${coreType}`}
-              ref={ref}
-              cols={120}
-              rows={36}
-              autoResize
-              debug={debugMode}
-              onReady={handleReady}
-              onData={handleData}
-              onResize={handleResize}
-              onTitle={handleTitle}
+          {browserShellOpen ? (
+            <BrowserShell
+              key={`browser-shell-${coreType}`}
+              coreType={coreType}
+              onTitleChange={handleTitle}
               className="h-full w-full"
-              {...terminalCoreProps}
+            />
+          ) : agentTerminalOpen ? (
+            <AgentTerminal
+              key={`agent-terminal-${coreType}`}
+              ref={agentTerminalRef}
+              coreType={coreType}
+              onTitleChange={handleTitle}
+              onStateChange={setAgentState}
+              className="h-full w-full"
             />
           ) : (
-            <div className="flex h-full items-center justify-center bg-zinc-950 text-xs text-white/50">
-              {ghosttyLoadError ? `Ghostty core 載入失敗：${ghosttyLoadError}` : "正在載入 Ghostty core..."}
-            </div>
+            <TerminalRuntime
+              ref={runtimeRef}
+              mode={mode}
+              sessionName={sessionName}
+              sshConfig={sshConfig}
+              coreType={coreType}
+              debugEnabled={debugMode}
+              onConnectionStateChange={handleConnectionStateChange}
+              onTitleChange={handleTitle}
+              onDiagnosticsChange={handleDiagnosticsChange}
+              className="h-full w-full"
+            />
           )}
         </div>
       </div>
 
       {debugMode ? (
-        <div className="border-t border-amber-500/30 bg-zinc-950/95">
-          <div className="flex items-center justify-between gap-3 px-4 py-1.5">
+        <div className="border-t border-amber-500/20 bg-zinc-950/95">
+          <div
+            className="flex cursor-pointer items-center justify-between px-4 py-1.5"
+            onClick={() => setPanelExpanded((p) => !p)}
+          >
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPanelExpanded((previous) => !previous)}
-                className="text-xs font-medium text-amber-400 transition-colors hover:text-amber-300"
+              <span className="text-[10px] font-semibold text-amber-400">Debug Panel</span>
+              <div
+                className="flex items-center gap-1 rounded bg-white/5 p-0.5"
+                onClick={(e) => e.stopPropagation()}
               >
-                Debug Panel
-              </button>
-              <div className="flex items-center gap-1 rounded-md bg-white/5 p-1">
                 <button
                   onClick={() => setActiveDebugTab("escape")}
-                  className={`rounded px-2 py-0.5 text-[10px] transition-colors ${
+                  className={`rounded px-2 py-0.5 text-[9px] transition-colors ${
                     activeDebugTab === "escape"
                       ? "bg-amber-500/20 text-amber-300"
-                      : "text-white/40 hover:text-white/70"
+                      : "text-white/30 hover:text-white/60"
                   }`}
                 >
-                  Escape Log ({debugLogs.length})
+                  Escape ({diagnostics.logs.length})
                 </button>
                 <button
                   onClick={() => setActiveDebugTab("hex")}
-                  className={`rounded px-2 py-0.5 text-[10px] transition-colors ${
+                  className={`rounded px-2 py-0.5 text-[9px] transition-colors ${
                     activeDebugTab === "hex"
                       ? "bg-amber-500/20 text-amber-300"
-                      : "text-white/40 hover:text-white/70"
+                      : "text-white/30 hover:text-white/60"
                   }`}
                 >
-                  Hex Dump ({hexEntries.length})
+                  Hex ({diagnostics.hexEntries.length})
                 </button>
               </div>
             </div>
-            <button
-              onClick={() => setPanelExpanded((previous) => !previous)}
-              className="text-xs text-white/40 transition-colors hover:text-white/70"
-              title={panelExpanded ? "摺疊 debug panel" : "展開 debug panel"}
-            >
+            <span className="text-[10px] text-white/25">
               {panelExpanded ? "▼" : "▶"}
-            </button>
+            </span>
           </div>
 
           {panelExpanded ? (
             <div
               ref={panelContentRef}
-              className="debug-panel-scroll h-[200px] overflow-y-auto border-t border-white/10 px-4 py-2 font-mono text-[10px]"
+              className="debug-panel-scroll h-48 overflow-y-auto border-t border-white/[0.06] px-4 py-2 font-mono text-[10px]"
             >
               {activeDebugTab === "escape" ? (
                 <div className="space-y-1">
-                  {debugLogs.length > 0 ? (
-                    debugLogs.map((log, index) => (
-                      <div key={`${log.timestamp}-${index}`} className="flex gap-2 text-white/60">
-                        <span className="text-white/30">
+                  {diagnostics.logs.length > 0 ? (
+                    diagnostics.logs.map((log, index) => (
+                      <div key={`${log.timestamp}-${index}`} className="flex gap-2 text-white/50">
+                        <span className="text-white/20">
                           {new Date(log.timestamp).toISOString().slice(11, 23)}
                         </span>
                         <span className="text-amber-400">[{log.type}]</span>
@@ -739,22 +1082,27 @@ export default function WebCliV2() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-white/30">等待終端輸出...</div>
+                    <div className="text-white/25">
+                      {diagnostics.availability === "degraded" && diagnostics.message
+                        ? diagnostics.message
+                        : "等待終端輸出..."}
+                    </div>
                   )}
                 </div>
               ) : (
-                <div className="space-y-3 text-white/60">
-                  {hexEntries.length > 0 ? (
-                    hexEntries.map((entry, index) => (
-                      <div key={`${entry.timestamp}-${index}`} className="space-y-1">
-                        <div className="text-white/30">
-                          [{new Date(entry.timestamp).toISOString().slice(11, 23)}] {entry.byteLength} bytes
+                <div className="space-y-3 text-white/50">
+                  {diagnostics.hexEntries.length > 0 ? (
+                    diagnostics.hexEntries.map((entry, index) => (
+                      <div key={`${entry.timestamp}-${index}`} className="space-y-0.5">
+                        <div className="text-white/25">
+                          [{new Date(entry.timestamp).toISOString().slice(11, 23)}]{" "}
+                          {entry.byteLength}B
                         </div>
-                        <pre className="whitespace-pre-wrap text-emerald-400/80">{entry.dump}</pre>
+                        <pre className="whitespace-pre-wrap text-emerald-400/70">{entry.dump}</pre>
                       </div>
                     ))
                   ) : (
-                    <div className="text-white/30">等待 PTY 輸出...</div>
+                    <div className="text-white/25">等待 PTY 輸出...</div>
                   )}
                 </div>
               )}
@@ -764,52 +1112,34 @@ export default function WebCliV2() {
       ) : null}
 
       {deleteConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="max-w-sm rounded-lg border border-white/20 bg-zinc-900 p-4">
-            <p className="mb-1 text-sm text-white/80">
-              確定要刪除 session 「{deleteConfirm}」？
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-80 rounded-xl border border-white/10 bg-zinc-900 p-5 shadow-2xl">
+            <p className="mb-1 text-sm font-medium text-white/80">
+              刪除「{deleteConfirm}」？
             </p>
-            <p className="mb-4 text-xs text-white/40">
-              此操作無法復原
+            <p className="mb-4 text-xs leading-5 text-white/35">
+              此操作無法復原。
               {deleteConfirm === sessionName && connected ? (
-                <span className="text-red-400">（此為當前連線的 session，刪除後將斷線）</span>
+                <span className="text-red-400/80">（當前連線的 session，刪除後將斷線）</span>
               ) : null}
             </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="rounded bg-zinc-700 px-3 py-1 text-xs text-white/60 hover:text-white"
+                className="rounded-lg bg-white/5 px-4 py-1.5 text-xs text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
               >
                 取消
               </button>
               <button
                 onClick={() => void handleDelete(deleteConfirm)}
-                className="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-500"
+                className="rounded-lg bg-red-600/80 px-4 py-1.5 text-xs text-white transition-colors hover:bg-red-600"
               >
-                刪除
+                確認刪除
               </button>
             </div>
           </div>
         </div>
       ) : null}
-
-      <footer className="border-t border-white/10 bg-zinc-900/50 px-4 py-1.5 text-[10px] text-white/40 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div>
-            Session: <span className="font-mono text-emerald-400">{sessionName}</span>
-          </div>
-          <div>
-            Core: <span className="font-mono text-emerald-400">{CORE_CONFIG[coreType].label}</span>{" "}
-            <span className="text-white/30">({CORE_CONFIG[coreType].size})</span>
-          </div>
-          <div>
-            Theme: <span className="font-mono text-emerald-400">{currentTheme.label}</span>
-          </div>
-        </div>
-        <div>
-          Tip: 在終端內輸入 <span className="font-mono text-white/60">tmux new-window</span> 或使用 <span className="font-mono">Ctrl-b c</span>
-        </div>
-      </footer>
     </div>
   );
 }

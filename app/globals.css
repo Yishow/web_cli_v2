@@ -2,12 +2,40 @@
 
 @import "@wterm/react/css";
 
-:root {
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+body {
+  font-family: var(--font-mono), ui-monospace, Menlo, monospace;
 }
 
-body {
-  font-family: var(--font-mono);
+/* CJK-aware monospace font stack for terminal */
+.wterm {
+  --term-font-family:
+    'JetBrains Mono',
+    'Menlo',
+    'Consolas',
+    'DejaVu Sans Mono',
+    'Noto Sans Mono CJK TC',
+    'Noto Sans Mono CJK SC',
+    'WenQuanYi Zen Hei Mono',
+    'Courier New',
+    monospace;
+}
+
+/* Custom scrollbar for terminal scrollback region */
+.wterm.has-scrollback::-webkit-scrollbar {
+  width: 6px;
+}
+
+.wterm.has-scrollback::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wterm.has-scrollback::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+.wterm.has-scrollback::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
 select option {

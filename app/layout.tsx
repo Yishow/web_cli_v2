@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
+import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "web_cli_v2 • wterm + tmux",
@@ -12,9 +19,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-TW">
-      <body 
-        className="bg-zinc-950 text-white antialiased"
+    <html lang="zh-TW" className={jetbrainsMono.variable}>
+      <body
+        className="bg-[#08090d] text-white antialiased"
         suppressHydrationWarning
       >
         {children}

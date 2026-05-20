@@ -1,5 +1,3 @@
-import { DebugAdapter, type TraceEntry } from "@wterm/dom";
-
 export const DEBUG_QUERY_PARAM = "debug";
 export const MAX_DEBUG_ENTRIES = 1000;
 
@@ -8,11 +6,6 @@ export interface DebugLog {
   type: string;
   sequence: string;
   description: string;
-}
-
-export interface DebugTerminalLike {
-  bridge: unknown | null;
-  debug: DebugAdapter | null;
 }
 
 export function getInitialDebugMode(): boolean {
@@ -71,67 +64,4 @@ export function formatHexDump(
     byteLength: bytes.length,
     nextOffset: startOffset + bytes.length,
   };
-}
-
-export function collectTraceLogs(
-  traces: readonly TraceEntry[],
-  startIndex: number,
-  timestamp: number,
-): { logs: DebugLog[]; nextIndex: number } {
-  const logs = traces.slice(startIndex).map((trace) => ({
-    timestamp,
-    type: trace.type.toUpperCase(),
-    sequence: escapeSequence(trace.raw),
-    description: describeTrace(trace),
-  }));
-
-  return {
-    logs,
-    nextIndex: traces.length,
-  };
-}
-
-export function syncDebugAdapter(terminal: DebugTerminalLike | null, enabled: boolean): void {
-  if (!terminal) {
-    return;
-  }
-
-  if (!enabled) {
-    terminal.debug = null;
-    return;
-  }
-
-  if (terminal.debug || !terminal.bridge) {
-    return;
-  }
-
-  const adapter = new DebugAdapter();
-  adapter.setBridge(terminal.bridge as never);
-  terminal.debug = adapter;
-}
-
-function escapeSequence(raw: string): string {
-  return JSON.stringify(raw).slice(1, -1);
-}
-
-function describeTrace(trace: TraceEntry): string {
-  if (trace.type === "osc") {
-    return "Operating system command";
-  }
-
-  if (trace.type === "csi") {
-    const params = trace.params?.length ? ` params=[${trace.params.join(",")}]` : "";
-    return `Control sequence ${trace.final ?? ""}${params}`.trim();
-  }
-
-  if (trace.type === "sgr") {
-    const params = trace.params?.length ? ` params=[${trace.params.join(",")}]` : "";
-    return `Select graphic rendition${params}`;
-  }
-
-  if (trace.type === "esc") {
-    return `Escape sequence ${trace.final ?? ""}`.trim();
-  }
-
-  return `Text output (${trace.raw.length} chars)`;
 }

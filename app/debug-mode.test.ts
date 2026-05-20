@@ -1,18 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DebugAdapter, type TraceEntry } from "@wterm/dom";
-
 import {
   appendRingBuffer,
-  collectTraceLogs,
   formatHexDump,
   getInitialDebugMode,
   isDebugToggleShortcut,
   readDebugMode,
   setDebugModeSearch,
-  syncDebugAdapter,
-  type DebugTerminalLike,
 } from "./debug-mode";
 
 test("starts with debug mode disabled before client hydration", () => {
@@ -45,51 +40,8 @@ test("formats PTY output as a traditional hex dump with running offsets", () => 
   assert.equal(result.dump, "00000010  41 e4 bd a0                                      |A...|");
 });
 
-test("collects new trace logs from the last unread trace index", () => {
-  const traces: TraceEntry[] = [
-    { ts: 1, type: "text", raw: "hello" },
-    { ts: 2, type: "osc", raw: "\u001b]0;vim\u0007" },
-    { ts: 3, type: "csi", raw: "\u001b[31m", params: [31], final: "m" },
-  ];
-
-  const result = collectTraceLogs(traces, 1, 123);
-
-  assert.equal(result.nextIndex, 3);
-  assert.deepEqual(result.logs, [
-    {
-      timestamp: 123,
-      type: "OSC",
-      sequence: "\\u001b]0;vim\\u0007",
-      description: "Operating system command",
-    },
-    {
-      timestamp: 123,
-      type: "CSI",
-      sequence: "\\u001b[31m",
-      description: "Control sequence m params=[31]",
-    },
-  ]);
-});
-
 test("keeps only the newest ring buffer entries", () => {
   const result = appendRingBuffer([1, 2, 3], 4, 3);
 
   assert.deepEqual(result, [2, 3, 4]);
-});
-
-test("enables and disables the wterm DebugAdapter on an existing instance", () => {
-  const terminal: DebugTerminalLike = {
-    bridge: { ready: true },
-    debug: null,
-  };
-
-  syncDebugAdapter(terminal, true);
-  assert.ok(terminal.debug instanceof DebugAdapter);
-
-  const firstAdapter = terminal.debug;
-  syncDebugAdapter(terminal, true);
-  assert.equal(terminal.debug, firstAdapter);
-
-  syncDebugAdapter(terminal, false);
-  assert.equal(terminal.debug, null);
 });

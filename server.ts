@@ -15,6 +15,7 @@ import {
   createPtyClientMessageState,
   handlePtyClientMessage,
 } from "./src/pty-client-message";
+import { handleSSHConnection } from "./src/ssh-bridge";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOST || "127.0.0.1";
@@ -174,6 +175,10 @@ app.prepare().then(() => {
         const sessionName = query.session as string | undefined;
         handlePTYConnection(ws, sessionName);
       });
+    } else if (pathname === "/api/ssh") {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        handleSSHConnection(ws);
+      });
     } else {
       app.getUpgradeHandler()(req, socket, head);
     }
@@ -182,5 +187,6 @@ app.prepare().then(() => {
   server.listen(port, hostname, () => {
     console.log(`> web_cli_v2 ready on http://${hostname}:${port}`);
     console.log(`> WebSocket endpoint: ws://${hostname}:${port}/api/terminal?session=xxx`);
+    console.log(`> SSH endpoint: ws://${hostname}:${port}/api/ssh`);
   });
 });

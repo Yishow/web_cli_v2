@@ -68,7 +68,7 @@ export function handlePtyClientMessage(
   return { type: "buffer" };
 }
 
-function parseResizeMessage(input: string): { cols: number; rows: number } | null {
+export function parseResizeMessage(input: string): { cols: number; rows: number } | null {
   const match = input.match(/\x1b\[RESIZE:(\d+);(\d+)\]/);
 
   if (!match) {

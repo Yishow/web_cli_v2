@@ -1,5 +1,7 @@
 allowBuilds:
+  cpu-features: set this to true or false
   esbuild: false
   node-pty: true
   sharp: true
+  ssh2: set this to true or false
   unrs-resolver: true
