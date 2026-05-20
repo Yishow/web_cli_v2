@@ -28,12 +28,12 @@ function createStorage(initialValue?: string | null) {
   };
 }
 
-test("uses built-in core when no storage is available", () => {
-  assert.equal(loadCorePreference(null), "builtin");
+test("uses Ghostty core when no storage is available", () => {
+  assert.equal(loadCorePreference(null), "ghostty");
 });
 
-test("starts from built-in before client hydration", () => {
-  assert.equal(getInitialCorePreference(), "builtin");
+test("starts from Ghostty before client hydration", () => {
+  assert.equal(getInitialCorePreference(), "ghostty");
 });
 
 test("restores a saved ghostty preference", () => {
@@ -43,11 +43,11 @@ test("restores a saved ghostty preference", () => {
   assert.deepEqual(writes, []);
 });
 
-test("repairs invalid stored values back to built-in", () => {
+test("repairs invalid stored values back to Ghostty", () => {
   const { storage, writes } = createStorage("invalid-core");
 
-  assert.equal(loadCorePreference(storage), "builtin");
-  assert.deepEqual(writes, [[CORE_PREFERENCE_KEY, "builtin"]]);
+  assert.equal(loadCorePreference(storage), "ghostty");
+  assert.deepEqual(writes, [[CORE_PREFERENCE_KEY, "ghostty"]]);
 });
 
 test("exposes the expected wasm urls and size labels", () => {

@@ -21,11 +21,15 @@ import {
   MAX_RECONNECT_ATTEMPTS,
 } from "../reconnect";
 import { buildSshConnectPayload } from "../ssh-mode";
+import { TERMINAL_STYLE } from "../terminal-style";
 import { parseSshControlMessage } from "../../src/ssh-control-message";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./core-loader";
 import { collectDiagnosticsSnapshot, createDiagnosticsState, syncDebugAdapter } from "./diagnostics";
+import { getReadyTransportStrategy } from "./ready-transport-strategy";
+import { sendResizeControlMessage } from "./resize-control-message";
 import { buildTransportWebSocketUrl } from "./transport";
 import type { ConnectionStatus, TerminalRuntimeHandle, TerminalRuntimeProps } from "./types";
+import { patchWideCharRendererWorkaround } from "./wide-char-workaround";
 
 export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntimeProps>(
   function TerminalRuntime(
@@ -58,6 +62,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
     const intentionalCloseRef = useRef(false);
     const closeReasonRef = useRef<"intentional" | "error" | null>(null);
     const connectionSessionRef = useRef(sessionName);
+    const viewportRef = useRef<{ cols: number; rows: number } | null>(null);
     const openSocketRef = useRef<(targetSession: string) => void>(() => {});
     const debugEnabledRef = useRef(debugEnabled);
     const modeRef = useRef(mode);
@@ -143,6 +148,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
           setConnected(true);
           setConnectionStatus("connected");
           setConnectionError(null);
+          sendResizeControlMessage(ws, viewportRef.current);
 
           if (didReconnect) {
             write(formatReconnectedMessage());
@@ -288,25 +294,27 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
     }, []);
 
     const handleResize = useCallback((cols: number, rows: number) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(`\x1b[RESIZE:${cols};${rows}]`);
-      }
+      viewportRef.current = { cols, rows };
+      sendResizeControlMessage(wsRef.current, viewportRef.current);
     }, []);
 
     const handleReady = useCallback(
-      (_terminal: WTerm) => {
+      (terminal: WTerm) => {
+        viewportRef.current = {
+          cols: terminal.cols,
+          rows: terminal.rows,
+        };
         setCoreReady(true);
-        syncDebugAdapter(ref.current?.instance ?? null, debugEnabledRef.current);
+        patchWideCharRendererWorkaround(terminal.bridge);
+        syncDebugAdapter(terminal, debugEnabledRef.current);
 
-        if (modeRef.current === "ssh") {
+        if (getReadyTransportStrategy(modeRef.current) === "manual") {
           return;
         }
 
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          openSocket(connectionSessionRef.current);
-        }
+        connect(connectionSessionRef.current);
       },
-      [openSocket, ref],
+      [connect],
     );
 
     useEffect(() => {
@@ -410,6 +418,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
           onResize={handleResize}
           onTitle={onTitleChange}
           className="h-full w-full"
+          style={TERMINAL_STYLE}
           {...terminalCoreProps}
         />
         {!coreReady && (

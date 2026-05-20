@@ -6,18 +6,32 @@ body {
   font-family: var(--font-mono), ui-monospace, Menlo, monospace;
 }
 
-/* CJK-aware monospace font stack for terminal */
-.wterm {
-  --term-font-family:
-    'JetBrains Mono',
-    'Menlo',
-    'Consolas',
-    'DejaVu Sans Mono',
-    'Noto Sans Mono CJK TC',
-    'Noto Sans Mono CJK SC',
-    'WenQuanYi Zen Hei Mono',
-    'Courier New',
-    monospace;
+body .wterm.focused .term-cursor {
+  background: transparent !important;
+  color: inherit !important;
+  outline: 1px solid var(--term-cursor) !important;
+  outline-offset: -1px;
+}
+
+body .wterm.focused.cursor-blink .term-cursor {
+  animation: cursor-outline-blink 1s step-end infinite !important;
+}
+
+@keyframes cursor-outline-blink {
+  0%,
+  100% {
+    background: transparent;
+    color: inherit;
+    outline: 1px solid var(--term-cursor);
+    outline-offset: -1px;
+  }
+
+  50% {
+    background: transparent;
+    color: inherit;
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+  }
 }
 
 /* Custom scrollbar for terminal scrollback region */

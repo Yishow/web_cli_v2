@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TerminalCore } from "@wterm/core";
+import type { WTerm } from "@wterm/dom";
 import { GhosttyCore } from "@wterm/ghostty";
 import { BashShell } from "@wterm/just-bash";
 import { Terminal, useTerminal } from "@wterm/react";
 
 import type { CoreType } from "./core-preference";
 import { BROWSER_SHELL_FILES, BROWSER_SHELL_GREETING } from "./browser-shell-files";
+import { TERMINAL_STYLE } from "./terminal-style";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./terminal-runtime/core-loader";
+import { patchWideCharRendererWorkaround } from "./terminal-runtime/wide-char-workaround";
 
 interface BrowserShellProps {
   coreType: CoreType;
@@ -23,7 +26,8 @@ export function BrowserShell({ coreType, onTitleChange, className }: BrowserShel
   const [ghosttyLoadError, setGhosttyLoadError] = useState<string | null>(null);
   const [coreReady, setCoreReady] = useState(false);
 
-  const handleReady = useCallback(() => {
+  const handleReady = useCallback((terminal: WTerm) => {
+    patchWideCharRendererWorkaround(terminal.bridge);
     setCoreReady(true);
     onTitleChange?.("Demo Shell");
 
@@ -101,6 +105,7 @@ export function BrowserShell({ coreType, onTitleChange, className }: BrowserShel
         }}
         onReady={handleReady}
         className="h-full w-full"
+        style={TERMINAL_STYLE}
         {...terminalCoreProps}
       />
       {!coreReady && (
