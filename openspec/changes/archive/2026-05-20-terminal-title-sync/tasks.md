@@ -2,6 +2,14 @@
 
 ## Tasks
 
+## Progress
+
+- [x] Task 1: 新增 terminalTitle state 與 handleTitle callback
+- [x] Task 2: 新增 document.title 同步 useEffect
+- [x] Task 3: 將 onTitle callback 傳入 Terminal 元件
+- [x] Task 4: 在 Header 新增終端標題顯示 UI
+- [x] Task 5: 端對端驗證與手動測試
+
 ### Task 1: 新增 terminalTitle state 與 handleTitle callback
 - **檔案**: `app/page.tsx`
 - **改動**:
@@ -95,3 +103,7 @@
   12. 確認 header 中的標題文字與瀏覽器 tab 標題同步
   13. 測試長標題：`printf '\033]0;%s\007' "$(python3 -c 'print("A"*200)')"` ，確認 header 截斷顯示且 hover 可見完整標題
 - **驗證**: 所有步驟通過，無 console error
+
+## Notes
+
+- 此環境的 tmux 預設 `set-titles` 為 `off`，驗證時需先開啟，否則 tmux 不會把 title update 傳給終端 client。

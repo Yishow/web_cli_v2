@@ -2,6 +2,19 @@
 
 ## Tasks
 
+## Progress
+
+- [x] Task 1: 確認 wterm CSS 變數名稱
+- [x] Task 2: 在 globals.css 定義主題 CSS custom properties 與 4 組主題 class
+- [x] Task 3: 建立主題中繼資料檔案 themes.ts
+- [x] Task 4: 在 page.tsx 新增主題狀態管理與 localStorage 讀寫
+- [x] Task 5: 修改終端容器使用動態主題 CSS class
+- [x] Task 6: 在 Header 新增主題切換下拉選單 UI
+- [x] Task 7: 在 Footer 顯示當前主題資訊
+- [x] Task 8: 下拉選單樣式微調
+- [x] Task 9: 端對端驗證與手動測試
+- [x] Task 10:（可選）合併 ghostty-core-toggle 與 theme-switching 的 UI 佈局
+
 ### Task 1: 確認 wterm CSS 變數名稱
 - **檔案**: 無（調查任務）
 - **改動**:

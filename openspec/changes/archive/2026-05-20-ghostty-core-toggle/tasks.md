@@ -2,6 +2,18 @@
 
 ## Tasks
 
+## Progress
+
+- [x] Task 1: 安裝 @wterm/ghostty 套件
+- [x] Task 2: 確認 Ghostty WASM 檔案路徑並複製到 public
+- [x] Task 3: 建立 WASM 複製腳本（postinstall hook）
+- [x] Task 4: 在 app/page.tsx 新增 core 狀態管理與 localStorage 讀寫
+- [x] Task 5: 修改 Terminal 元件使用動態 wasmUrl 與 key
+- [x] Task 6: 在 Header 新增 Core 下拉選單 UI
+- [x] Task 7: 在 Footer 顯示當前 Core 資訊
+- [x] Task 8: 端對端驗證與手動測試
+- [x] Task 9:（可選）加入 Tailwind 樣式微調
+
 ### Task 1: 安裝 @wterm/ghostty 套件
 - **檔案**: `package.json`
 - **改動**: 執行 `pnpm add @wterm/ghostty`，在 dependencies 中新增 `"@wterm/ghostty": "^0.3.0"`（版本號與其他 @wterm/* 套件對齊）

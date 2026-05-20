@@ -2,6 +2,17 @@
 
 ## Tasks
 
+## Progress
+
+- [x] Task 1: 新增 debug 狀態管理與 URL query parameter 同步
+- [x] Task 2: 在 Header 新增 Debug Toggle 開關
+- [x] Task 3: 加入 Ctrl+Shift+D 快捷鍵
+- [x] Task 4: 新增 PTY 輸出 hex dump 資料收集
+- [x] Task 5: 新增 Escape Sequence 解析日誌收集
+- [x] Task 6: 建立可摺疊 Debug 面板元件
+- [x] Task 7: 調整 Debug 面板樣式
+- [x] Task 8: 端對端驗證與手動測試
+
 ### Task 1: 新增 debug 狀態管理與 URL query parameter 同步
 - **檔案**: `app/page.tsx`
 - **改動**:
@@ -289,3 +300,8 @@
   9. 測試摺疊/展開面板不影響終端操作
   10. 確認非 debug 模式下（預設狀態）終端行為與改動前完全一致
 - **驗證**: 所有步驟通過，無 console error，非 debug 模式下無效能退化
+
+## Notes
+
+- `@wterm/react` 的 `debug` prop 為 init-only，因此切換 debug 模式時改為直接同步既有 `WTerm` instance 的 `debug` adapter，避免違反「切換時不中斷連線」的需求。
+- `?debug=true` 初版會造成 hydration mismatch，已改為首次 render 固定關閉、mount 後再從 URL 套用 debug 狀態。

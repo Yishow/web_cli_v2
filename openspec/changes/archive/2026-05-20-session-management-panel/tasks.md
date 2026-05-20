@@ -2,6 +2,19 @@
 
 ## Tasks
 
+## Progress
+
+- [x] Task 1: 在 server.ts 新增 GET /api/sessions endpoint
+- [x] Task 2: 在 server.ts 新增 DELETE /api/sessions/:name endpoint
+- [x] Task 3: 在 page.tsx 新增 session 列表 API 呼叫函數
+- [x] Task 4: 在 page.tsx 新增側邊欄狀態管理
+- [x] Task 5: 重構 connect 函數以支援外部 session 名稱
+- [x] Task 6: 在 header 新增 Sessions 按鈕
+- [x] Task 7: 實作側邊欄面板 UI
+- [x] Task 8: 實作刪除確認對話框
+- [x] Task 9: 元件初始化時背景載入 session 數量
+- [x] Task 10: 端對端驗證與手動測試
+
 ### Task 1: 在 server.ts 新增 GET /api/sessions endpoint
 - **檔案**: `server.ts`
 - **改動**:

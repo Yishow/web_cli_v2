@@ -2,6 +2,17 @@
 
 ## Tasks
 
+## Progress
+
+- [x] Task 1: 新增重連相關的常數、state 和 ref
+- [x] Task 2: 新增 scheduleReconnect 和 attemptReconnect 函數
+- [x] Task 3: 修改 connect 函數，加入主動斷線標記和重連狀態重設
+- [x] Task 4: 新增 beforeunload 事件處理
+- [x] Task 5: 元件卸載時清除重連 timer
+- [x] Task 6: 修改 header 狀態指示器支援三態
+- [x] Task 7: 修改 header 連線按鈕在重連中的行為
+- [x] Task 8: 端對端驗證與手動測試
+
 ### Task 1: 新增重連相關的常數、state 和 ref
 - **檔案**: `app/page.tsx`
 - **改動**:
