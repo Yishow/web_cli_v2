@@ -531,7 +531,9 @@ export default function WebCliV2() {
 
   return (
     <div
-      className="flex h-screen flex-col bg-[#08090d]"
+      className={compactShell
+        ? "terminal-shell-root terminal-shell-root--compact"
+        : "flex h-screen flex-col bg-[#08090d]"}
       data-shell-band={shellPolicy.band}
       data-terminal-inset={shellPolicy.terminalInset}
     >
@@ -1028,127 +1030,128 @@ export default function WebCliV2() {
         </header>
       )}
 
-      <div
-        className="relative flex-1 overflow-hidden"
-        data-drawer-width={shellPolicy.drawerWidth}
-      >
-        {sidebarVisible && (
-          <div
-            className={`absolute inset-0 z-30 ${shellPolicy.usesOverlayDrawer ? "bg-black/30" : ""}`}
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
+      <div className="min-h-0 flex-1 overflow-hidden">
         <div
-          className={`${drawerClasses} ${sidebarVisible ? "translate-x-0" : "-translate-x-full"}`}
+          className={`${compactShell ? "terminal-shell-stage--compact " : ""}relative h-full overflow-hidden`}
+          data-drawer-width={shellPolicy.drawerWidth}
         >
-          <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2.5">
-              <span className="text-[9px] font-semibold tracking-widest text-white/35 uppercase">
-                Sessions
-              </span>
-              <button
-                onClick={handleRefreshSessions}
-                className="text-sm leading-none text-white/25 transition-colors hover:text-white/60"
-                title="重新整理"
-              >
-                ↻
-              </button>
-            </div>
+          {sidebarVisible && (
+            <div
+              className={`absolute inset-0 z-30 ${shellPolicy.usesOverlayDrawer ? "bg-black/30" : ""}`}
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
 
-            <div className="border-b border-white/[0.06] px-3 py-3">
-              <div className="mb-1.5 text-[9px] uppercase tracking-wider text-white/25">
-                連線目標
-              </div>
-              <div className="flex gap-1.5">
-                <HydrationSafeInput
-                  type="text"
-                  value={newSessionInput}
-                  onChange={(e) => setNewSessionInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleNewSessionConnect();
-                  }}
-                  className="min-w-0 flex-1 rounded border border-white/10 bg-zinc-900 px-2 py-1 text-[10px] font-mono text-white/75 placeholder-white/20 focus:border-emerald-500/40 focus:outline-none"
-                  placeholder="tmux session name"
-                />
+          <div
+            className={`${drawerClasses} ${sidebarVisible ? "translate-x-0" : "-translate-x-full"}`}
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2.5">
+                <span className="text-[9px] font-semibold tracking-widest text-white/35 uppercase">
+                  Sessions
+                </span>
                 <button
-                  onClick={handleNewSessionConnect}
-                  className="rounded bg-emerald-700/70 px-2.5 py-1 text-[10px] font-medium text-emerald-100 transition-colors hover:bg-emerald-600/70"
+                  onClick={handleRefreshSessions}
+                  className="text-sm leading-none text-white/25 transition-colors hover:text-white/60"
+                  title="重新整理"
                 >
-                  連線
+                  ↻
                 </button>
               </div>
-              {connected ? (
-                <button
-                  onClick={handleDisconnect}
-                  className="mt-1.5 w-full rounded border border-white/10 py-1 text-[10px] text-white/30 transition-colors hover:border-red-500/30 hover:text-red-400"
-                >
-                  斷線
-                </button>
-              ) : null}
-            </div>
 
-            <div className="flex-1 overflow-y-auto">
-              {sessions.length === 0 ? (
-                <div className="px-3 py-10 text-center text-[10px] leading-6 text-white/20">
-                  尚無 session
-                  <br />
-                  輸入名稱後點「連線」建立新 session
+              <div className="border-b border-white/[0.06] px-3 py-3">
+                <div className="mb-1.5 text-[9px] uppercase tracking-wider text-white/25">
+                  連線目標
                 </div>
-              ) : (
-                <div>
-                  <div className="px-3 pb-1 pt-2.5 text-[9px] uppercase tracking-wider text-white/20">
-                    現有 Sessions
+                <div className="flex gap-1.5">
+                  <HydrationSafeInput
+                    type="text"
+                    value={newSessionInput}
+                    onChange={(e) => setNewSessionInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleNewSessionConnect();
+                    }}
+                    className="min-w-0 flex-1 rounded border border-white/10 bg-zinc-900 px-2 py-1 text-[10px] font-mono text-white/75 placeholder-white/20 focus:border-emerald-500/40 focus:outline-none"
+                    placeholder="tmux session name"
+                  />
+                  <button
+                    onClick={handleNewSessionConnect}
+                    className="rounded bg-emerald-700/70 px-2.5 py-1 text-[10px] font-medium text-emerald-100 transition-colors hover:bg-emerald-600/70"
+                  >
+                    連線
+                  </button>
+                </div>
+                {connected ? (
+                  <button
+                    onClick={handleDisconnect}
+                    className="mt-1.5 w-full rounded border border-white/10 py-1 text-[10px] text-white/30 transition-colors hover:border-red-500/30 hover:text-red-400"
+                  >
+                    斷線
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {sessions.length === 0 ? (
+                  <div className="px-3 py-10 text-center text-[10px] leading-6 text-white/20">
+                    尚無 session
+                    <br />
+                    輸入名稱後點「連線」建立新 session
                   </div>
-                  {sessions.map((session) => (
-                    <div
-                      key={session.name}
-                      className={`group relative flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors hover:bg-white/[0.04] ${
-                        session.name === sessionName && connected
-                          ? "bg-emerald-500/[0.06]"
-                          : ""
-                      }`}
-                      onClick={() => handleSwitchSession(session.name)}
-                    >
-                      {session.name === sessionName && connected ? (
-                        <div className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-emerald-500" />
-                      ) : null}
-                      <span
-                        className={`text-[8px] ${
-                          session.attached ? "text-emerald-400" : "text-zinc-600"
-                        }`}
-                      >
-                        ●
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-mono text-[10px] text-white/70">
-                          {session.name}
-                        </div>
-                        <div className="text-[9px] text-white/25">
-                          {new Date(session.created * 1000).toLocaleString()} ·{" "}
-                          {session.windows}w
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirm(session.name);
-                        }}
-                        className="text-[10px] text-white/20 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
-                        title="刪除 session"
-                      >
-                        ✕
-                      </button>
+                ) : (
+                  <div>
+                    <div className="px-3 pb-1 pt-2.5 text-[9px] uppercase tracking-wider text-white/20">
+                      現有 Sessions
                     </div>
-                  ))}
-                </div>
-              )}
+                    {sessions.map((session) => (
+                      <div
+                        key={session.name}
+                        className={`group relative flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors hover:bg-white/[0.04] ${
+                          session.name === sessionName && connected
+                            ? "bg-emerald-500/[0.06]"
+                            : ""
+                        }`}
+                        onClick={() => handleSwitchSession(session.name)}
+                      >
+                        {session.name === sessionName && connected ? (
+                          <div className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-emerald-500" />
+                        ) : null}
+                        <span
+                          className={`text-[8px] ${
+                            session.attached ? "text-emerald-400" : "text-zinc-600"
+                          }`}
+                        >
+                          ●
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-mono text-[10px] text-white/70">
+                            {session.name}
+                          </div>
+                          <div className="text-[9px] text-white/25">
+                            {new Date(session.created * 1000).toLocaleString()} ·{" "}
+                            {session.windows}w
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirm(session.name);
+                          }}
+                          className="text-[10px] text-white/20 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                          title="刪除 session"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {!browserShellOpen && !agentTerminalOpen && mode === "ssh" ? (
-          <div className="absolute inset-x-2 top-2 z-20 rounded-xl sm:inset-x-4 sm:top-4 border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+          {!browserShellOpen && !agentTerminalOpen && mode === "ssh" ? (
+            <div className="absolute inset-x-2 top-2 z-20 rounded-xl border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm sm:inset-x-4 sm:top-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <div className="text-[10px] font-semibold tracking-widest text-cyan-300 uppercase">
@@ -1253,11 +1256,11 @@ export default function WebCliV2() {
                 </button>
               </div>
             </div>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        {browserShellOpen ? (
-          <div className="absolute inset-x-2 top-2 z-20 rounded-xl sm:inset-x-4 sm:top-4 border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+          {browserShellOpen ? (
+            <div className="absolute inset-x-2 top-2 z-20 rounded-xl border border-cyan-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm sm:inset-x-4 sm:top-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[10px] font-semibold tracking-widest text-cyan-300 uppercase">
@@ -1274,11 +1277,11 @@ export default function WebCliV2() {
                 返回工作 shell
               </button>
             </div>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        {agentTerminalOpen ? (
-          <div className="absolute inset-x-2 top-2 z-20 rounded-xl sm:inset-x-4 sm:top-4 border border-fuchsia-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm">
+          {agentTerminalOpen ? (
+            <div className="absolute inset-x-2 top-2 z-20 rounded-xl border border-fuchsia-500/20 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-sm sm:inset-x-4 sm:top-4">
             <div className="mb-3 flex items-start justify-between gap-4">
               <div>
                 <div className="text-[10px] font-semibold tracking-widest text-fuchsia-300 uppercase">
@@ -1333,44 +1336,45 @@ export default function WebCliV2() {
                 </button>
               </div>
             </div>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        <div
-          className={`absolute inset-0 overflow-hidden ${currentTheme.cssClass} ${
-            debugMode ? "ring-1 ring-inset ring-amber-500/15" : ""
-          }`}
-        >
-          {browserShellOpen ? (
-            <BrowserShell
-              key={`browser-shell-${coreType}`}
-              coreType={coreType}
-              onTitleChange={handleTitle}
-              className="h-full w-full"
-            />
-          ) : agentTerminalOpen ? (
-            <AgentTerminal
-              key={`agent-terminal-${coreType}`}
-              ref={agentTerminalRef}
-              coreType={coreType}
-              onTitleChange={handleTitle}
-              onStateChange={setAgentState}
-              className="h-full w-full"
-            />
-          ) : (
-            <TerminalRuntime
-              ref={runtimeRef}
-              mode={mode}
-              sessionName={sessionName}
-              sshConfig={sshConfig}
-              coreType={coreType}
-              debugEnabled={debugMode}
-              onConnectionStateChange={handleConnectionStateChange}
-              onTitleChange={handleTitle}
-              onDiagnosticsChange={handleDiagnosticsChange}
-              className="h-full w-full"
-            />
-          )}
+          <div
+            className={`absolute inset-0 overflow-hidden ${currentTheme.cssClass} ${
+              debugMode ? "ring-1 ring-inset ring-amber-500/15" : ""
+            }`}
+          >
+            {browserShellOpen ? (
+              <BrowserShell
+                key={`browser-shell-${coreType}`}
+                coreType={coreType}
+                onTitleChange={handleTitle}
+                className="h-full w-full"
+              />
+            ) : agentTerminalOpen ? (
+              <AgentTerminal
+                key={`agent-terminal-${coreType}`}
+                ref={agentTerminalRef}
+                coreType={coreType}
+                onTitleChange={handleTitle}
+                onStateChange={setAgentState}
+                className="h-full w-full"
+              />
+            ) : (
+              <TerminalRuntime
+                ref={runtimeRef}
+                mode={mode}
+                sessionName={sessionName}
+                sshConfig={sshConfig}
+                coreType={coreType}
+                debugEnabled={debugMode}
+                onConnectionStateChange={handleConnectionStateChange}
+                onTitleChange={handleTitle}
+                onDiagnosticsChange={handleDiagnosticsChange}
+                className="h-full w-full"
+              />
+            )}
+          </div>
         </div>
       </div>
 

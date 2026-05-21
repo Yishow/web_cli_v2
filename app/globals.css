@@ -172,6 +172,27 @@ select option {
   background-color: rgba(245, 158, 11, 0.5);
 }
 
+.terminal-shell-root {
+  display: flex;
+  flex-direction: column;
+  background: #08090d;
+}
+
+.terminal-shell-root--compact {
+  min-height: 100dvh;
+}
+
+.terminal-shell-stage--compact {
+  min-height: 0;
+  padding: 4px;
+}
+
+@media (min-width: 768px) {
+  .terminal-shell-stage--compact {
+    padding: 8px;
+  }
+}
+
 .terminal-shell-header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);

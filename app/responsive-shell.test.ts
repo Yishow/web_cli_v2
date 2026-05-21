@@ -64,3 +64,8 @@ test("compact shell requires overlay drawer and collapsed secondary controls", (
   assert.equal(policy.usesOverlayDrawer, true);
   assert.equal(policy.secondaryHeaderCollapsedByDefault, true);
 });
+
+test("1366px still uses the compact shell but 1367px switches to desktop", () => {
+  assert.equal(getResponsiveShellPolicy(1366).isCompact, true);
+  assert.equal(getResponsiveShellPolicy(1367).isCompact, false);
+});
