@@ -78,15 +78,15 @@ Desktop keeps the existing denser layout model.
 
 ## 2. Responsive Model
 
-Define three behavior bands:
+Define three behavior bands with explicit viewport-width thresholds:
 
 | Band | Intent | Shell behavior |
 | --- | --- | --- |
-| Phone | terminal-first, minimal chrome | two-stage header, overlay drawer, minimal terminal margins |
-| Tablet | terminal-first, slightly roomier chrome | same model as phone, with slightly larger spacing and drawer width |
-| Desktop | current dense shell | existing richer header and layout remain the default |
+| Phone | `< 768px` | terminal-first, minimal chrome: two-stage header, overlay drawer, minimal terminal margins |
+| Tablet / compact-large | `>= 768px and <= 1366px` | terminal-first, slightly roomier chrome: same model as phone, with larger spacing and drawer width |
+| Desktop | `> 1366px` | current dense shell: existing richer header and layout remain the default |
 
-The important rule is that phone and tablet share the same mental model. Only spacing and sizing change between them.
+The important rule is that phone and tablet share the same mental model. Only spacing and sizing change between them. The compact-shell range intentionally extends through `1366px` so currently common iPad landscape widths remain in the terminal-first shell instead of falling back to desktop density. Narrow desktop browser windows inside that same range should also use the compact shell.
 
 ## 3. Shell Responsibilities
 
