@@ -82,7 +82,6 @@ export default function WebCliV2() {
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugPanelTab>("escape");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [secondaryHeaderOpen, setSecondaryHeaderOpen] = useState(false);
   const [newSessionInput, setNewSessionInput] = useState("webcli-main");
 
@@ -92,8 +91,8 @@ export default function WebCliV2() {
   const panelContentRef = useRef<HTMLDivElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const settingsBtnRef = useRef<HTMLButtonElement | null>(null);
-  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
-  const mobileMenuBtnRef = useRef<HTMLButtonElement | null>(null);
+  const secondaryHeaderRef = useRef<HTMLDivElement | null>(null);
+  const secondaryHeaderBtnRef = useRef<HTMLButtonElement | null>(null);
   const modeSwitchMountedRef = useRef(false);
   const shellBandRef = useRef<ReturnType<typeof getResponsiveShellPolicy>["band"]>("compact");
 
@@ -359,10 +358,27 @@ export default function WebCliV2() {
   const coreGuidance = getCoreGuidance(coreType);
   const shellPolicy = getResponsiveShellPolicy(viewportWidth);
   const compactShell = shellPolicy.isCompact;
+  const localSessionsVisible = !browserShellOpen && !agentTerminalOpen && mode === "local";
+  const sidebarVisible = localSessionsVisible && sidebarOpen;
   const sshConnectReady = buildSshConnectPayload(sshConfig) !== null;
   const sshTargetLabel = sshConfig.host
     ? `${sshConfig.username || "user"}@${sshConfig.host}:${sshConfig.port || "22"}`
     : "SSH";
+  const compactSecondaryMeta = browserShellOpen
+    ? "Demo Shell"
+    : agentTerminalOpen
+      ? "Agent Stream"
+      : mode === "local"
+        ? sessionName
+        : sshTargetLabel;
+  const drawerWidthClass = shellPolicy.drawerWidth === "phone"
+    ? "w-[85vw] max-w-80"
+    : shellPolicy.drawerWidth === "tablet"
+      ? "w-[22rem] max-w-[88vw]"
+      : "w-72";
+  const drawerClasses = shellPolicy.usesOverlayDrawer
+    ? `absolute inset-y-0 left-0 z-40 ${drawerWidthClass} border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200`
+    : "absolute inset-y-0 left-0 z-40 w-72 border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200";
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -468,19 +484,19 @@ export default function WebCliV2() {
   }, [settingsOpen]);
 
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    if (!compactShell || !secondaryHeaderOpen) return;
     const handler = (e: MouseEvent) => {
       if (
-        mobileMenuRef.current?.contains(e.target as Node) ||
-        mobileMenuBtnRef.current?.contains(e.target as Node)
+        secondaryHeaderRef.current?.contains(e.target as Node) ||
+        secondaryHeaderBtnRef.current?.contains(e.target as Node)
       ) {
         return;
       }
-      setMobileMenuOpen(false);
+      setSecondaryHeaderOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => { document.removeEventListener("mousedown", handler); };
-  }, [mobileMenuOpen]);
+  }, [compactShell, secondaryHeaderOpen]);
 
   useEffect(() => {
     const syncViewport = () => {
@@ -493,6 +509,7 @@ export default function WebCliV2() {
 
       if (previousShellBand !== nextShellPolicy.band) {
         setSecondaryHeaderOpen(!nextShellPolicy.secondaryHeaderCollapsedByDefault);
+        setSettingsOpen(false);
 
         if (nextShellPolicy.usesOverlayDrawer) {
           setSidebarOpen(false);
@@ -518,363 +535,512 @@ export default function WebCliV2() {
       data-shell-band={shellPolicy.band}
       data-terminal-inset={shellPolicy.terminalInset}
     >
-      <header
-        className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3"
-        data-compact-shell={compactShell ? "true" : "false"}
-        data-secondary-header-open={secondaryHeaderOpen ? "true" : "false"}
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">
-            web_cli_v2
-          </span>
-          <div className="h-3 w-px bg-white/10" />
-          <div className="flex items-center gap-1 rounded border border-white/10 bg-black/20 p-0.5">
-            <button
-              onClick={() => handleModeChange("local")}
-              className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                mode === "local"
-                  ? "bg-emerald-500/15 text-emerald-300"
-                  : "text-white/35 hover:text-white/60"
-              }`}
-            >
-              Local
-            </button>
-            <button
-              onClick={() => handleModeChange("ssh")}
-              className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                mode === "ssh"
-                  ? "bg-cyan-500/15 text-cyan-300"
-                  : "text-white/35 hover:text-white/60"
-              }`}
-            >
-              SSH
-            </button>
-          </div>
-          {browserShellOpen ? (
-            <>
-              <div className="h-3 w-px bg-white/10" />
-              <span className="font-mono text-[10px] text-cyan-200/60">Demo Shell</span>
-            </>
-          ) : agentTerminalOpen ? (
-            <>
-              <div className="h-3 w-px bg-white/10" />
-              <span className="font-mono text-[10px] text-fuchsia-200/60">Agent Stream</span>
-            </>
-          ) : mode === "local" ? (
-            <>
-              <div className="h-3 w-px bg-white/10" />
-              <button
-                onClick={() => setSidebarOpen((open) => !open)}
-                className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
-                  sidebarOpen
-                    ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
-                    : "text-white/40 hover:bg-white/5 hover:text-white/60"
-                }`}
-              >
-                <span>Sessions</span>
-                {sessions.length > 0 && (
-                  <span className="rounded-full bg-white/10 px-1 text-[9px] leading-4 text-white/50">
-                    {sessions.length}
-                  </span>
-                )}
-              </button>
-              <div className="h-3 w-px bg-white/10" />
-              <span className="font-mono text-[10px] text-white/30">{sessionName}</span>
-            </>
-          ) : (
-            <>
-              <div className="h-3 w-px bg-white/10" />
-              <span className="font-mono text-[10px] text-cyan-200/60">{sshTargetLabel}</span>
-            </>
-          )}
-        </div>
-
-        <div className="flex-1 px-6 text-center">
-          {terminalTitle && (
-            <span className="inline-block max-w-xs truncate font-mono text-[10px] text-white/20">
-              {getHeaderTitle(terminalTitle)}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Desktop-only secondary buttons */}
-          <div className="hidden sm:flex items-center gap-2">
-            <button
-              onClick={agentTerminalOpen ? handleCloseAgentTerminal : handleOpenAgentTerminal}
-              className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                agentTerminalOpen
-                  ? "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/20"
-                  : "text-fuchsia-200/50 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
-              }`}
-              title="Agent output terminal"
-            >
-              {agentTerminalOpen ? "Close Agent" : "Agent View"}
-            </button>
-
-            <div className="h-3 w-px bg-white/10" />
-
-            <button
-              onClick={browserShellOpen ? handleCloseBrowserShell : handleOpenBrowserShell}
-              className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                browserShellOpen
-                  ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/20"
-                  : "text-cyan-200/50 hover:bg-cyan-500/10 hover:text-cyan-200"
-              }`}
-              title="Browser-only demo shell"
-            >
-              {browserShellOpen ? "Close Demo" : "Try Demo Shell"}
-            </button>
-
-            <div className="h-3 w-px bg-white/10" />
-
-            <div className="relative">
-              <button
-                ref={settingsBtnRef}
-                onClick={() => setSettingsOpen((o) => !o)}
-                className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                  settingsOpen
-                    ? "bg-white/10 text-white/70"
-                    : "text-white/30 hover:bg-white/5 hover:text-white/60"
-                }`}
-                title="設定"
-              >
-                ⚙ 設定
-              </button>
-              {settingsOpen && (
-                <div
-                  ref={settingsRef}
-                  className="absolute right-0 top-full z-50 mt-1.5 w-60 rounded-lg border border-white/10 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-sm"
+      {compactShell ? (
+        <header
+          className="terminal-shell-header"
+          data-compact-shell="true"
+          data-secondary-header-open={secondaryHeaderOpen ? "true" : "false"}
+        >
+          <div className="terminal-shell-header-primary">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">
+                web_cli_v2
+              </span>
+              <div className="flex items-center gap-1 rounded border border-white/10 bg-black/20 p-0.5">
+                <button
+                  onClick={() => handleModeChange("local")}
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                    mode === "local"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "text-white/35 hover:text-white/60"
+                  }`}
                 >
-                  <div className="mb-2.5 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
-                    偏好設定
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <label className="w-16 shrink-0 text-[10px] text-white/45">Core</label>
-                      <select
-                        value={coreType}
-                        onChange={handleCoreChange}
-                        className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
-                      >
-                        <option value="builtin">Built-in (~12KB)</option>
-                        <option value="ghostty">Ghostty (~400KB)</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="w-16 shrink-0 text-[10px] text-white/45">Theme</label>
-                      <select
-                        value={themeId}
-                        onChange={handleThemeChange}
-                        className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
-                      >
-                        {THEMES.map((theme) => (
-                          <option key={theme.id} value={theme.id}>
-                            {theme.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="pt-1 text-[9px] text-white/20">
-                      Core: {CORE_CONFIG[coreType].label} ({CORE_CONFIG[coreType].size})
-                      {" · "}Theme: {currentTheme.label}
-                    </div>
-                    {coreGuidance && (
-                      <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-[9px] text-amber-100/85">
-                        <div className="font-semibold text-amber-200">{coreGuidance.title}</div>
-                        <div className="mt-1 text-amber-100/70">{coreGuidance.description}</div>
-                        <button
-                          onClick={handleUseRecommendedCore}
-                          className="mt-2 rounded border border-amber-400/30 px-2 py-1 text-[9px] font-medium text-amber-100 transition-colors hover:bg-amber-400/10"
-                        >
-                          切換到 Ghostty
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                  Local
+                </button>
+                <button
+                  onClick={() => handleModeChange("ssh")}
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                    mode === "ssh"
+                      ? "bg-cyan-500/15 text-cyan-300"
+                      : "text-white/35 hover:text-white/60"
+                  }`}
+                >
+                  SSH
+                </button>
+              </div>
             </div>
 
-            <div className="h-3 w-px bg-white/10" />
+            <div className="flex min-w-0 items-center gap-2">
+              {browserShellOpen ? (
+                <div className="flex items-center gap-1.5 text-[10px] text-cyan-300/80">
+                  <span className="text-[8px]">◇</span>
+                  <span>Demo</span>
+                </div>
+              ) : agentTerminalOpen ? (
+                agentState.status === "error" && agentState.errorMessage ? (
+                  <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+                    <span className="text-[8px]">▲</span>
+                    <span className="max-w-24 truncate">{agentState.errorMessage}</span>
+                  </div>
+                ) : agentState.status === "loading" || agentState.status === "streaming" ? (
+                  <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-fuchsia-300">
+                    <span className="text-[8px]">◌</span>
+                    <span>{agentState.status === "loading" ? "Agent..." : "Streaming"}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-[10px] text-fuchsia-300/80">
+                    <span className="text-[8px]">◇</span>
+                    <span>Agent</span>
+                  </div>
+                )
+              ) : connectionStatus === "error" && connectionError ? (
+                <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+                  <span className="text-[8px]">▲</span>
+                  <span className="max-w-24 truncate">{connectionError}</span>
+                </div>
+              ) : connected ? (
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+                  <span className="text-[8px]">●</span>
+                  <span>已連線</span>
+                </div>
+              ) : connectionStatus === "connecting" || reconnectAttempt > 0 ? (
+                <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-yellow-400">
+                  <span className="text-[8px]">◌</span>
+                  <span>{mode === "ssh" ? "SSH..." : "重連中"}</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (mode === "ssh") {
+                      handleSshConnect();
+                      return;
+                    }
 
-            <button
-              onClick={toggleDebug}
-              className={`rounded px-2 py-1 text-[10px] transition-colors ${
-                debugMode
-                  ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
-                  : "text-white/30 hover:bg-white/5 hover:text-white/60"
-              }`}
-              title="Debug Mode (Ctrl+Shift+D)"
-            >
-              {debugMode ? "Debug ON" : "Debug"}
-            </button>
+                    runtimeRef.current?.connect();
+                  }}
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-white/30 transition-colors hover:bg-emerald-700/20 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="點擊重新連線"
+                  disabled={mode === "ssh" && !sshConnectReady}
+                >
+                  <span className="text-[8px]">○</span>
+                  <span>{mode === "ssh" ? "SSH" : "未連線"}</span>
+                </button>
+              )}
 
-            <div className="h-3 w-px bg-white/10" />
+              {mode === "local" ? (
+                <button
+                  onClick={() => {
+                    setSidebarOpen((open) => !open);
+                    setSecondaryHeaderOpen(false);
+                  }}
+                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
+                    sidebarOpen
+                      ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                      : "text-white/40 hover:bg-white/5 hover:text-white/60"
+                  }`}
+                >
+                  <span>Sessions</span>
+                  {sessions.length > 0 && (
+                    <span className="rounded-full bg-white/10 px-1 text-[9px] leading-4 text-white/50">
+                      {sessions.length}
+                    </span>
+                  )}
+                </button>
+              ) : null}
+
+              <button
+                ref={secondaryHeaderBtnRef}
+                onClick={() => setSecondaryHeaderOpen((open) => !open)}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  secondaryHeaderOpen
+                    ? "bg-white/10 text-white/70"
+                    : "text-white/35 hover:bg-white/5 hover:text-white/60"
+                }`}
+              >
+                Controls
+              </button>
+            </div>
           </div>
 
-          {/* Status indicator (always visible) */}
-          {browserShellOpen ? (
-            <div className="flex items-center gap-1.5 text-[10px] text-cyan-300/80">
-              <span className="text-[8px]">◇</span>
-              <span className="hidden sm:inline">browser-only · no backend · no persistence</span>
-            </div>
-          ) : agentTerminalOpen ? (
-            agentState.status === "error" && agentState.errorMessage ? (
-              <div className="flex items-center gap-1.5 text-[10px] text-red-400">
-                <span className="text-[8px]">▲</span>
-                <span className="max-w-28 truncate sm:max-w-44">{agentState.errorMessage}</span>
+          {secondaryHeaderOpen ? (
+            <div ref={secondaryHeaderRef} className="terminal-shell-header-secondary">
+              <div className="terminal-shell-header-secondary-meta">
+                <span className="terminal-shell-header-secondary-label">Context</span>
+                <span className="truncate font-mono text-[10px] text-white/45">
+                  {compactSecondaryMeta}
+                  {terminalTitle ? ` · ${getHeaderTitle(terminalTitle)}` : ""}
+                </span>
               </div>
-            ) : agentState.status === "loading" || agentState.status === "streaming" ? (
-              <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-fuchsia-300">
-                <span className="text-[8px]">◌</span>
-                <span>{agentState.status === "loading" ? "Agent 準備中..." : "streaming..."}</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-[10px] text-fuchsia-300/80">
-                <span className="text-[8px]">◇</span>
-                <span className="hidden sm:inline">read-mostly terminal · dedicated endpoint</span>
-              </div>
-            )
-          ) : connectionStatus === "error" && connectionError ? (
-            <div className="flex items-center gap-1.5 text-[10px] text-red-400">
-              <span className="text-[8px]">▲</span>
-              <span className="max-w-28 truncate sm:max-w-44">{connectionError}</span>
-            </div>
-          ) : connected ? (
-            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
-              <span className="text-[8px]">●</span>
-              <span>已連線</span>
-            </div>
-          ) : connectionStatus === "connecting" || reconnectAttempt > 0 ? (
-            <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-yellow-400">
-              <span className="text-[8px]">◌</span>
-              <span>{mode === "ssh" ? "SSH 連線中..." : "重連中..."}</span>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                if (mode === "ssh") {
-                  handleSshConnect();
-                  return;
-                }
 
-                runtimeRef.current?.connect();
-              }}
-              className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-white/30 transition-colors hover:bg-emerald-700/20 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
-              title="點擊重新連線"
-              disabled={mode === "ssh" && !sshConnectReady}
-            >
-              <span className="text-[8px]">○</span>
-              <span>{mode === "ssh" ? "SSH 連線" : "未連線"}</span>
-            </button>
-          )}
-
-          {/* Mobile hamburger menu */}
-          <div className="relative sm:hidden">
-            <button
-              ref={mobileMenuBtnRef}
-              onClick={() => setMobileMenuOpen((o) => !o)}
-              className={`rounded px-2.5 py-1 text-[13px] leading-none transition-colors ${
-                mobileMenuOpen
-                  ? "bg-white/10 text-white/70"
-                  : "text-white/35 hover:bg-white/5 hover:text-white/60"
-              }`}
-            >
-              ⋮
-            </button>
-            {mobileMenuOpen && (
-              <div
-                ref={mobileMenuRef}
-                className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border border-white/10 bg-zinc-900/98 p-2 shadow-2xl backdrop-blur-sm"
-              >
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => {
                     agentTerminalOpen ? handleCloseAgentTerminal() : handleOpenAgentTerminal();
-                    setMobileMenuOpen(false);
+                    setSecondaryHeaderOpen(false);
                   }}
-                  className={`w-full rounded px-2 py-2 text-left text-[10px] transition-colors ${
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
                     agentTerminalOpen
-                      ? "bg-fuchsia-500/10 text-fuchsia-300"
-                      : "text-fuchsia-200/70 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
+                      ? "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/20"
+                      : "text-fuchsia-200/60 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
                   }`}
+                  title="Agent output terminal"
                 >
                   {agentTerminalOpen ? "Close Agent" : "Agent View"}
                 </button>
                 <button
                   onClick={() => {
                     browserShellOpen ? handleCloseBrowserShell() : handleOpenBrowserShell();
-                    setMobileMenuOpen(false);
+                    setSecondaryHeaderOpen(false);
                   }}
-                  className={`w-full rounded px-2 py-2 text-left text-[10px] transition-colors ${
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
                     browserShellOpen
-                      ? "bg-cyan-500/10 text-cyan-300"
-                      : "text-cyan-200/70 hover:bg-cyan-500/10 hover:text-cyan-200"
+                      ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/20"
+                      : "text-cyan-200/60 hover:bg-cyan-500/10 hover:text-cyan-200"
                   }`}
+                  title="Browser-only demo shell"
                 >
                   {browserShellOpen ? "Close Demo" : "Demo Shell"}
                 </button>
                 <button
-                  onClick={() => { toggleDebug(); setMobileMenuOpen(false); }}
-                  className={`w-full rounded px-2 py-2 text-left text-[10px] transition-colors ${
+                  onClick={() => {
+                    toggleDebug();
+                    setSecondaryHeaderOpen(false);
+                  }}
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
                     debugMode
-                      ? "bg-amber-500/10 text-amber-400"
-                      : "text-white/45 hover:bg-white/5 hover:text-white/70"
+                      ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                      : "text-white/35 hover:bg-white/5 hover:text-white/60"
                   }`}
+                  title="Debug Mode (Ctrl+Shift+D)"
                 >
                   {debugMode ? "Debug ON" : "Debug"}
                 </button>
-                <div className="mt-1 border-t border-white/[0.06] pt-1.5">
-                  <div className="mb-1.5 px-2 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
-                    偏好設定
-                  </div>
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <label className="w-12 shrink-0 text-[10px] text-white/45">Core</label>
-                    <select
-                      value={coreType}
-                      onChange={handleCoreChange}
-                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
-                    >
-                      <option value="builtin">Built-in (~12KB)</option>
-                      <option value="ghostty">Ghostty (~400KB)</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <label className="w-12 shrink-0 text-[10px] text-white/45">Theme</label>
-                    <select
-                      value={themeId}
-                      onChange={handleThemeChange}
-                      className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
-                    >
-                      {THEMES.map((theme) => (
-                        <option key={theme.id} value={theme.id}>
-                          {theme.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
               </div>
+
+              <div className="terminal-shell-header-secondary-controls">
+                <label className="terminal-shell-header-field">
+                  <span className="terminal-shell-header-secondary-label">Core</span>
+                  <select
+                    value={coreType}
+                    onChange={(event) => {
+                      handleCoreChange(event);
+                      setSecondaryHeaderOpen(false);
+                    }}
+                    className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                  >
+                    <option value="builtin">Built-in (~12KB)</option>
+                    <option value="ghostty">Ghostty (~400KB)</option>
+                  </select>
+                </label>
+                <label className="terminal-shell-header-field">
+                  <span className="terminal-shell-header-secondary-label">Theme</span>
+                  <select
+                    value={themeId}
+                    onChange={(event) => {
+                      handleThemeChange(event);
+                      setSecondaryHeaderOpen(false);
+                    }}
+                    className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                  >
+                    {THEMES.map((theme) => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="text-[9px] text-white/20">
+                Core: {CORE_CONFIG[coreType].label} ({CORE_CONFIG[coreType].size})
+                {" · "}Theme: {currentTheme.label}
+              </div>
+
+              {coreGuidance && (
+                <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-[9px] text-amber-100/85">
+                  <div className="font-semibold text-amber-200">{coreGuidance.title}</div>
+                  <div className="mt-1 text-amber-100/70">{coreGuidance.description}</div>
+                  <button
+                    onClick={() => {
+                      handleUseRecommendedCore();
+                      setSecondaryHeaderOpen(false);
+                    }}
+                    className="mt-2 rounded border border-amber-400/30 px-2 py-1 text-[9px] font-medium text-amber-100 transition-colors hover:bg-amber-400/10"
+                  >
+                    切換到 Ghostty
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </header>
+      ) : (
+        <header
+          className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3"
+          data-compact-shell="false"
+          data-secondary-header-open={secondaryHeaderOpen ? "true" : "false"}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">
+              web_cli_v2
+            </span>
+            <div className="h-3 w-px bg-white/10" />
+            <div className="flex items-center gap-1 rounded border border-white/10 bg-black/20 p-0.5">
+              <button
+                onClick={() => handleModeChange("local")}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  mode === "local"
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "text-white/35 hover:text-white/60"
+                }`}
+              >
+                Local
+              </button>
+              <button
+                onClick={() => handleModeChange("ssh")}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  mode === "ssh"
+                    ? "bg-cyan-500/15 text-cyan-300"
+                    : "text-white/35 hover:text-white/60"
+                }`}
+              >
+                SSH
+              </button>
+            </div>
+            {browserShellOpen ? (
+              <>
+                <div className="h-3 w-px bg-white/10" />
+                <span className="font-mono text-[10px] text-cyan-200/60">Demo Shell</span>
+              </>
+            ) : agentTerminalOpen ? (
+              <>
+                <div className="h-3 w-px bg-white/10" />
+                <span className="font-mono text-[10px] text-fuchsia-200/60">Agent Stream</span>
+              </>
+            ) : mode === "local" ? (
+              <>
+                <div className="h-3 w-px bg-white/10" />
+                <button
+                  onClick={() => setSidebarOpen((open) => !open)}
+                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
+                    sidebarOpen
+                      ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                      : "text-white/40 hover:bg-white/5 hover:text-white/60"
+                  }`}
+                >
+                  <span>Sessions</span>
+                  {sessions.length > 0 && (
+                    <span className="rounded-full bg-white/10 px-1 text-[9px] leading-4 text-white/50">
+                      {sessions.length}
+                    </span>
+                  )}
+                </button>
+                <div className="h-3 w-px bg-white/10" />
+                <span className="font-mono text-[10px] text-white/30">{sessionName}</span>
+              </>
+            ) : (
+              <>
+                <div className="h-3 w-px bg-white/10" />
+                <span className="font-mono text-[10px] text-cyan-200/60">{sshTargetLabel}</span>
+              </>
             )}
           </div>
-        </div>
-      </header>
+
+          <div className="flex-1 px-6 text-center">
+            {terminalTitle && (
+              <span className="inline-block max-w-xs truncate font-mono text-[10px] text-white/20">
+                {getHeaderTitle(terminalTitle)}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
+              <button
+                onClick={agentTerminalOpen ? handleCloseAgentTerminal : handleOpenAgentTerminal}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  agentTerminalOpen
+                    ? "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/20"
+                    : "text-fuchsia-200/50 hover:bg-fuchsia-500/10 hover:text-fuchsia-200"
+                }`}
+                title="Agent output terminal"
+              >
+                {agentTerminalOpen ? "Close Agent" : "Agent View"}
+              </button>
+
+              <div className="h-3 w-px bg-white/10" />
+
+              <button
+                onClick={browserShellOpen ? handleCloseBrowserShell : handleOpenBrowserShell}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  browserShellOpen
+                    ? "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/20"
+                    : "text-cyan-200/50 hover:bg-cyan-500/10 hover:text-cyan-200"
+                }`}
+                title="Browser-only demo shell"
+              >
+                {browserShellOpen ? "Close Demo" : "Try Demo Shell"}
+              </button>
+
+              <div className="h-3 w-px bg-white/10" />
+
+              <div className="relative">
+                <button
+                  ref={settingsBtnRef}
+                  onClick={() => setSettingsOpen((o) => !o)}
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                    settingsOpen
+                      ? "bg-white/10 text-white/70"
+                      : "text-white/30 hover:bg-white/5 hover:text-white/60"
+                  }`}
+                  title="設定"
+                >
+                  ⚙ 設定
+                </button>
+                {settingsOpen && (
+                  <div
+                    ref={settingsRef}
+                    className="absolute right-0 top-full z-50 mt-1.5 w-60 rounded-lg border border-white/10 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-sm"
+                  >
+                    <div className="mb-2.5 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
+                      偏好設定
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <label className="w-16 shrink-0 text-[10px] text-white/45">Core</label>
+                        <select
+                          value={coreType}
+                          onChange={handleCoreChange}
+                          className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                        >
+                          <option value="builtin">Built-in (~12KB)</option>
+                          <option value="ghostty">Ghostty (~400KB)</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <label className="w-16 shrink-0 text-[10px] text-white/45">Theme</label>
+                        <select
+                          value={themeId}
+                          onChange={handleThemeChange}
+                          className="min-w-0 flex-1 cursor-pointer rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[10px] font-mono text-white/75 focus:border-emerald-500/50 focus:outline-none"
+                        >
+                          {THEMES.map((theme) => (
+                            <option key={theme.id} value={theme.id}>
+                              {theme.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="pt-1 text-[9px] text-white/20">
+                        Core: {CORE_CONFIG[coreType].label} ({CORE_CONFIG[coreType].size})
+                        {" · "}Theme: {currentTheme.label}
+                      </div>
+                      {coreGuidance && (
+                        <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-[9px] text-amber-100/85">
+                          <div className="font-semibold text-amber-200">{coreGuidance.title}</div>
+                          <div className="mt-1 text-amber-100/70">{coreGuidance.description}</div>
+                          <button
+                            onClick={handleUseRecommendedCore}
+                            className="mt-2 rounded border border-amber-400/30 px-2 py-1 text-[9px] font-medium text-amber-100 transition-colors hover:bg-amber-400/10"
+                          >
+                            切換到 Ghostty
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-3 w-px bg-white/10" />
+
+              <button
+                onClick={toggleDebug}
+                className={`rounded px-2 py-1 text-[10px] transition-colors ${
+                  debugMode
+                    ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                    : "text-white/30 hover:bg-white/5 hover:text-white/60"
+                }`}
+                title="Debug Mode (Ctrl+Shift+D)"
+              >
+                {debugMode ? "Debug ON" : "Debug"}
+              </button>
+
+              <div className="h-3 w-px bg-white/10" />
+            </div>
+
+            {browserShellOpen ? (
+              <div className="flex items-center gap-1.5 text-[10px] text-cyan-300/80">
+                <span className="text-[8px]">◇</span>
+                <span className="hidden sm:inline">browser-only · no backend · no persistence</span>
+              </div>
+            ) : agentTerminalOpen ? (
+              agentState.status === "error" && agentState.errorMessage ? (
+                <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+                  <span className="text-[8px]">▲</span>
+                  <span className="max-w-28 truncate sm:max-w-44">{agentState.errorMessage}</span>
+                </div>
+              ) : agentState.status === "loading" || agentState.status === "streaming" ? (
+                <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-fuchsia-300">
+                  <span className="text-[8px]">◌</span>
+                  <span>{agentState.status === "loading" ? "Agent 準備中..." : "streaming..."}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[10px] text-fuchsia-300/80">
+                  <span className="text-[8px]">◇</span>
+                  <span className="hidden sm:inline">read-mostly terminal · dedicated endpoint</span>
+                </div>
+              )
+            ) : connectionStatus === "error" && connectionError ? (
+              <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+                <span className="text-[8px]">▲</span>
+                <span className="max-w-28 truncate sm:max-w-44">{connectionError}</span>
+              </div>
+            ) : connected ? (
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+                <span className="text-[8px]">●</span>
+                <span>已連線</span>
+              </div>
+            ) : connectionStatus === "connecting" || reconnectAttempt > 0 ? (
+              <div className="flex animate-pulse items-center gap-1.5 text-[10px] text-yellow-400">
+                <span className="text-[8px]">◌</span>
+                <span>{mode === "ssh" ? "SSH 連線中..." : "重連中..."}</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  if (mode === "ssh") {
+                    handleSshConnect();
+                    return;
+                  }
+
+                  runtimeRef.current?.connect();
+                }}
+                className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-white/30 transition-colors hover:bg-emerald-700/20 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                title="點擊重新連線"
+                disabled={mode === "ssh" && !sshConnectReady}
+              >
+                <span className="text-[8px]">○</span>
+                <span>{mode === "ssh" ? "SSH 連線" : "未連線"}</span>
+              </button>
+            )}
+          </div>
+        </header>
+      )}
 
       <div
         className="relative flex-1 overflow-hidden"
         data-drawer-width={shellPolicy.drawerWidth}
       >
-        {!browserShellOpen && !agentTerminalOpen && mode === "local" && sidebarOpen && (
+        {sidebarVisible && (
           <div
-            className="absolute inset-0 z-30"
+            className={`absolute inset-0 z-30 ${shellPolicy.usesOverlayDrawer ? "bg-black/30" : ""}`}
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
         <div
-          className={`absolute bottom-0 left-0 top-0 z-40 w-full sm:w-72 border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200 ${
-            !browserShellOpen && !agentTerminalOpen && mode === "local" && sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+          className={`${drawerClasses} ${sidebarVisible ? "translate-x-0" : "-translate-x-full"}`}
         >
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2.5">

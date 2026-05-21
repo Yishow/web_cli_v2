@@ -58,3 +58,9 @@ test("phone widths stay compact and use phone drawer sizing", () => {
     drawerWidth: "phone",
   });
 });
+
+test("compact shell requires overlay drawer and collapsed secondary controls", () => {
+  const policy = getResponsiveShellPolicy(1024);
+  assert.equal(policy.usesOverlayDrawer, true);
+  assert.equal(policy.secondaryHeaderCollapsedByDefault, true);
+});
