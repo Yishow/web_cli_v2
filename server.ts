@@ -18,7 +18,7 @@ import {
 import { handleSSHConnection } from "./src/ssh-bridge";
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOST || "127.0.0.1";
+const hostname = process.env.HOST || "0.0.0.0";
 const port = parseInt(process.env.PORT || "3000", 10);
 
 const app = next({ dev, hostname, port });

@@ -26,6 +26,7 @@ import { parseSshControlMessage } from "../../src/ssh-control-message";
 import { patchBoxDrawingRendererWorkaround } from "./box-drawing-workaround";
 import { getGhosttyLoadOptions, getTerminalCoreProps } from "./core-loader";
 import { collectDiagnosticsSnapshot, createDiagnosticsState, syncDebugAdapter } from "./diagnostics";
+import { attachImeCompositionAnchor } from "./ime-anchor";
 import { createTerminalOutputBatcher } from "./output-batcher";
 import { getReadyTransportStrategy } from "./ready-transport-strategy";
 import { sendResizeControlMessage } from "./resize-control-message";
@@ -64,6 +65,7 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
     const intentionalCloseRef = useRef(false);
     const closeReasonRef = useRef<"intentional" | "error" | null>(null);
     const connectionSessionRef = useRef(sessionName);
+    const imeAnchorCleanupRef = useRef<(() => void) | null>(null);
     const outputBatcherRef = useRef(
       createTerminalOutputBatcher({
         write,
@@ -322,6 +324,8 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
         setCoreReady(true);
         patchBoxDrawingRendererWorkaround(terminal);
         patchWideCharRendererWorkaround(terminal.bridge);
+        imeAnchorCleanupRef.current?.();
+        imeAnchorCleanupRef.current = attachImeCompositionAnchor(terminal.element);
         syncDebugAdapter(terminal, debugEnabledRef.current);
 
         if (getReadyTransportStrategy(modeRef.current) === "manual") {
@@ -405,6 +409,8 @@ export const TerminalRuntime = forwardRef<TerminalRuntimeHandle, TerminalRuntime
       const outputBatcher = outputBatcherRef.current;
 
       return () => {
+        imeAnchorCleanupRef.current?.();
+        imeAnchorCleanupRef.current = null;
         outputBatcher.flush();
         intentionalCloseRef.current = true;
         closeReasonRef.current = "intentional";

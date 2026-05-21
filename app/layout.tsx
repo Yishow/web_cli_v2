@@ -8,6 +8,12 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
   title: "web_cli_v2 • wterm + tmux",
   description: "Browser terminal with wterm and persistent tmux sessions",

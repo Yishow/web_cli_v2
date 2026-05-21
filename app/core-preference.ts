@@ -23,7 +23,7 @@ export const CORE_CONFIG = {
 } satisfies Record<CoreType, CoreConfig>;
 
 export function getInitialCorePreference(): CoreType {
-  return "ghostty";
+  return "builtin";
 }
 
 export function normalizeCorePreference(value: string | null | undefined): CoreType | null {
@@ -40,14 +40,5 @@ export function loadCorePreference(storage: StorageLike | null | undefined): Cor
   }
 
   const saved = normalizeCorePreference(storage.getItem(CORE_PREFERENCE_KEY));
-
-  if (saved) {
-    return saved;
-  }
-
-  if (storage.getItem(CORE_PREFERENCE_KEY) !== null) {
-    storage.setItem(CORE_PREFERENCE_KEY, "ghostty");
-  }
-
-  return getInitialCorePreference();
+  return saved ?? getInitialCorePreference();
 }
