@@ -1,5 +1,7 @@
 import type { CellData } from "@wterm/core";
 
+const DEFAULT_COLOR = 256;
+
 type TerminalCellReader = {
   getCell: (row: number, col: number) => CellData;
   getScrollbackCell?: (row: number, col: number) => CellData;
@@ -28,6 +30,11 @@ function toZeroWidthContinuation(cell: CellData, previousCell: CellData | null):
   return {
     ...cell,
     char: 0x200b,
+    fg: DEFAULT_COLOR,
+    bg: DEFAULT_COLOR,
+    flags: 0,
+    fgRgb: undefined,
+    bgRgb: undefined,
   };
 }
 

@@ -28,6 +28,9 @@ test("converts continuation cells after wide glyphs into zero-width spaces", () 
 
   assert.equal(core.getCell(0, 0).char, "中".codePointAt(0));
   assert.equal(core.getCell(0, 1).char, 0x200b);
+  assert.equal(core.getCell(0, 1).fg, 256);
+  assert.equal(core.getCell(0, 1).bg, 256);
+  assert.equal(core.getCell(0, 1).flags, 0);
   assert.equal(core.getCell(0, 2).char, "a".codePointAt(0));
 });
 
@@ -47,6 +50,9 @@ test("mirrors the same zero-width continuation handling for scrollback cells", (
   patchWideCharRendererWorkaround(core);
 
   assert.equal(core.getScrollbackCell?.(0, 1).char, 0x200b);
+  assert.equal(core.getScrollbackCell?.(0, 1).fg, 256);
+  assert.equal(core.getScrollbackCell?.(0, 1).bg, 256);
+  assert.equal(core.getScrollbackCell?.(0, 1).flags, 0);
   assert.equal(core.getScrollbackCell?.(0, 2).char, "x".codePointAt(0));
 });
 
