@@ -24,3 +24,14 @@ test("compact shell root is pinned to the viewport instead of scrolling with the
   assert.match(compactRootBlock[1], /^\s*right:\s*0;/m);
   assert.match(compactRootBlock[1], /^\s*overflow:\s*hidden;/m);
 });
+
+test("compact shell root offsets itself with the visual viewport when iOS pans during keyboard interactions", () => {
+  const css = fs.readFileSync(new URL("./globals.css", import.meta.url), "utf8");
+  const compactRootBlock = css.match(/\.terminal-shell-root--compact\s*\{([^}]*)\}/s);
+
+  assert.ok(compactRootBlock, "expected .terminal-shell-root--compact CSS block");
+  assert.match(
+    compactRootBlock[1],
+    /^\s*transform:\s*translateY\(var\(--terminal-shell-viewport-offset-top,\s*0px\)\);/m,
+  );
+});

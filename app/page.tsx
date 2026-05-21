@@ -45,7 +45,10 @@ import {
   THEME_STORAGE_KEY,
   type ThemeId,
 } from "./themes";
-import { readVisualViewportHeight } from "./visual-viewport-height";
+import {
+  readVisualViewportHeight,
+  readVisualViewportOffsetTop,
+} from "./visual-viewport-height";
 import {
   getInitialDebugMode,
   isDebugToggleShortcut,
@@ -73,6 +76,7 @@ export default function WebCliV2() {
   const [coreType, setCoreType] = useState<CoreType>(getInitialCorePreference);
   const [viewportWidth, setViewportWidth] = useState<number | null>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [viewportOffsetTop, setViewportOffsetTop] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -384,6 +388,7 @@ export default function WebCliV2() {
   const compactRootStyle = compactShell && viewportHeight !== null
     ? {
         "--terminal-shell-viewport-height": `${viewportHeight}px`,
+        "--terminal-shell-viewport-offset-top": `${viewportOffsetTop}px`,
       } as CSSProperties
     : undefined;
 
@@ -509,11 +514,13 @@ export default function WebCliV2() {
     const syncViewport = () => {
       const width = window.innerWidth;
       const height = readVisualViewportHeight(window);
+      const offsetTop = readVisualViewportOffsetTop(window);
       const nextShellPolicy = getResponsiveShellPolicy(width);
       const previousShellBand = shellBandRef.current;
 
       setViewportWidth(width);
       setViewportHeight(height);
+      setViewportOffsetTop(offsetTop);
       shellBandRef.current = nextShellPolicy.band;
 
       if (previousShellBand !== nextShellPolicy.band) {
@@ -532,10 +539,12 @@ export default function WebCliV2() {
 
     const timer = window.setTimeout(syncViewport, 0);
     window.visualViewport?.addEventListener("resize", syncViewport);
+    window.visualViewport?.addEventListener("scroll", syncViewport);
     window.addEventListener("resize", syncViewport);
     return () => {
       clearTimeout(timer);
       window.visualViewport?.removeEventListener("resize", syncViewport);
+      window.visualViewport?.removeEventListener("scroll", syncViewport);
       window.removeEventListener("resize", syncViewport);
     };
   }, []);

@@ -190,6 +190,7 @@ select option {
   height: var(--terminal-shell-viewport-height, 100dvh);
   min-height: var(--terminal-shell-viewport-height, 100dvh);
   overflow: hidden;
+  transform: translateY(var(--terminal-shell-viewport-offset-top, 0px));
 }
 
 .terminal-shell-stage--compact {
