@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import {
   CORE_CONFIG,
@@ -45,6 +45,7 @@ import {
   THEME_STORAGE_KEY,
   type ThemeId,
 } from "./themes";
+import { readVisualViewportHeight } from "./visual-viewport-height";
 import {
   getInitialDebugMode,
   isDebugToggleShortcut,
@@ -71,6 +72,7 @@ export default function WebCliV2() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [coreType, setCoreType] = useState<CoreType>(getInitialCorePreference);
   const [viewportWidth, setViewportWidth] = useState<number | null>(null);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -379,6 +381,11 @@ export default function WebCliV2() {
   const drawerClasses = shellPolicy.usesOverlayDrawer
     ? `absolute inset-y-0 left-0 z-40 ${drawerWidthClass} border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200`
     : "absolute inset-y-0 left-0 z-40 w-72 border-r border-white/[0.07] bg-[#0b0d12]/95 shadow-2xl backdrop-blur-md transition-transform duration-200";
+  const compactRootStyle = compactShell && viewportHeight !== null
+    ? {
+        "--terminal-shell-viewport-height": `${viewportHeight}px`,
+      } as CSSProperties
+    : undefined;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -501,10 +508,12 @@ export default function WebCliV2() {
   useEffect(() => {
     const syncViewport = () => {
       const width = window.innerWidth;
+      const height = readVisualViewportHeight(window);
       const nextShellPolicy = getResponsiveShellPolicy(width);
       const previousShellBand = shellBandRef.current;
 
       setViewportWidth(width);
+      setViewportHeight(height);
       shellBandRef.current = nextShellPolicy.band;
 
       if (previousShellBand !== nextShellPolicy.band) {
@@ -522,9 +531,11 @@ export default function WebCliV2() {
     };
 
     const timer = window.setTimeout(syncViewport, 0);
+    window.visualViewport?.addEventListener("resize", syncViewport);
     window.addEventListener("resize", syncViewport);
     return () => {
       clearTimeout(timer);
+      window.visualViewport?.removeEventListener("resize", syncViewport);
       window.removeEventListener("resize", syncViewport);
     };
   }, []);
@@ -534,6 +545,7 @@ export default function WebCliV2() {
       className={compactShell
         ? "terminal-shell-root terminal-shell-root--compact"
         : "flex h-screen flex-col bg-[#08090d]"}
+      style={compactRootStyle}
       data-shell-band={shellPolicy.band}
       data-terminal-inset={shellPolicy.terminalInset}
     >

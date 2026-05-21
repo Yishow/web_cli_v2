@@ -179,8 +179,8 @@ select option {
 }
 
 .terminal-shell-root--compact {
-  height: 100dvh;
-  min-height: 100dvh;
+  height: var(--terminal-shell-viewport-height, 100dvh);
+  min-height: var(--terminal-shell-viewport-height, 100dvh);
 }
 
 .terminal-shell-stage--compact {
