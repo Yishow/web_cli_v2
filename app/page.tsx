@@ -19,6 +19,7 @@ import { AgentTerminal, type AgentTerminalHandle } from "./agent-terminal";
 import type { AgentStreamState } from "./agent-shell";
 import { BrowserShell } from "./browser-shell";
 import { getCoreGuidance } from "./core-guidance";
+import { HydrationSafeInput, HydrationSafeTextarea } from "./hydration-guards";
 import {
   buildSshConnectPayload,
   clearSshCredentials,
@@ -847,7 +848,7 @@ export default function WebCliV2() {
                 連線目標
               </div>
               <div className="flex gap-1.5">
-                <input
+                <HydrationSafeInput
                   type="text"
                   value={newSessionInput}
                   onChange={(e) => setNewSessionInput(e.target.value)}
@@ -955,21 +956,21 @@ export default function WebCliV2() {
             </div>
 
             <div className="grid grid-cols-12 gap-2">
-              <input
+              <HydrationSafeInput
                 type="text"
                 value={sshConfig.host}
                 onChange={(event) => handleSshFieldChange("host", event.currentTarget.value)}
                 className="col-span-12 sm:col-span-4 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
                 placeholder="host"
               />
-              <input
+              <HydrationSafeInput
                 type="text"
                 value={sshConfig.port}
                 onChange={(event) => handleSshFieldChange("port", event.currentTarget.value)}
                 className="col-span-6 sm:col-span-2 rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
                 placeholder="22"
               />
-              <input
+              <HydrationSafeInput
                 type="text"
                 value={sshConfig.username}
                 onChange={(event) => handleSshFieldChange("username", event.currentTarget.value)}
@@ -1001,7 +1002,7 @@ export default function WebCliV2() {
             </div>
 
             {sshConfig.authMethod === "password" ? (
-              <input
+              <HydrationSafeInput
                 type="password"
                 value={sshConfig.password}
                 onChange={(event) => handleSshFieldChange("password", event.currentTarget.value)}
@@ -1009,7 +1010,7 @@ export default function WebCliV2() {
                 placeholder="password"
               />
             ) : (
-              <textarea
+              <HydrationSafeTextarea
                 value={sshConfig.privateKey}
                 onChange={(event) => handleSshFieldChange("privateKey", event.currentTarget.value)}
                 className="mt-2 h-28 w-full rounded border border-white/10 bg-zinc-900 px-2 py-1.5 text-[10px] font-mono text-white/80 placeholder-white/20 focus:border-cyan-500/40 focus:outline-none"
@@ -1082,7 +1083,7 @@ export default function WebCliV2() {
               </button>
             </div>
 
-            <textarea
+            <HydrationSafeTextarea
               value={agentPrompt}
               onChange={(event) => setAgentPrompt(event.currentTarget.value)}
               className="h-24 w-full rounded border border-white/10 bg-zinc-900 px-3 py-2 text-[11px] text-white/80 placeholder-white/20 focus:border-fuchsia-500/40 focus:outline-none"

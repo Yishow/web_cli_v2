@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { rootHydrationProps } from "./hydration-guards";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -25,7 +26,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-TW" className={jetbrainsMono.variable}>
+    <html
+      lang="zh-TW"
+      className={jetbrainsMono.variable}
+      {...rootHydrationProps}
+    >
       <body
         className="bg-[#08090d] text-white antialiased"
         suppressHydrationWarning
