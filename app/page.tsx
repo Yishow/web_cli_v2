@@ -20,6 +20,7 @@ import type { AgentStreamState } from "./agent-shell";
 import { BrowserShell } from "./browser-shell";
 import { getCoreGuidance } from "./core-guidance";
 import { HydrationSafeInput, HydrationSafeTextarea } from "./hydration-guards";
+import { getResponsiveShellPolicy } from "./responsive-shell";
 import {
   buildSshConnectPayload,
   clearSshCredentials,
@@ -69,6 +70,7 @@ export default function WebCliV2() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionState["status"]>("disconnected");
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [coreType, setCoreType] = useState<CoreType>(getInitialCorePreference);
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -81,6 +83,7 @@ export default function WebCliV2() {
   const [activeDebugTab, setActiveDebugTab] = useState<DebugPanelTab>("escape");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [secondaryHeaderOpen, setSecondaryHeaderOpen] = useState(false);
   const [newSessionInput, setNewSessionInput] = useState("webcli-main");
 
   const runtimeRef = useRef<TerminalRuntimeHandle | null>(null);
@@ -92,6 +95,7 @@ export default function WebCliV2() {
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuBtnRef = useRef<HTMLButtonElement | null>(null);
   const modeSwitchMountedRef = useRef(false);
+  const shellBandRef = useRef<ReturnType<typeof getResponsiveShellPolicy>["band"]>("compact");
 
   const loadSessions = useCallback(async () => {
     try {
@@ -353,6 +357,8 @@ export default function WebCliV2() {
 
   const currentTheme = getThemeMeta(themeId ?? DEFAULT_THEME);
   const coreGuidance = getCoreGuidance(coreType);
+  const shellPolicy = getResponsiveShellPolicy(viewportWidth);
+  const compactShell = shellPolicy.isCompact;
   const sshConnectReady = buildSshConnectPayload(sshConfig) !== null;
   const sshTargetLabel = sshConfig.host
     ? `${sshConfig.username || "user"}@${sshConfig.host}:${sshConfig.port || "22"}`
@@ -476,9 +482,47 @@ export default function WebCliV2() {
     return () => { document.removeEventListener("mousedown", handler); };
   }, [mobileMenuOpen]);
 
+  useEffect(() => {
+    const syncViewport = () => {
+      const width = window.innerWidth;
+      const nextShellPolicy = getResponsiveShellPolicy(width);
+      const previousShellBand = shellBandRef.current;
+
+      setViewportWidth(width);
+      shellBandRef.current = nextShellPolicy.band;
+
+      if (previousShellBand !== nextShellPolicy.band) {
+        setSecondaryHeaderOpen(!nextShellPolicy.secondaryHeaderCollapsedByDefault);
+
+        if (nextShellPolicy.usesOverlayDrawer) {
+          setSidebarOpen(false);
+        }
+
+        if (nextShellPolicy.debugCollapsedByDefault) {
+          setPanelExpanded(false);
+        }
+      }
+    };
+
+    const timer = window.setTimeout(syncViewport, 0);
+    window.addEventListener("resize", syncViewport);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", syncViewport);
+    };
+  }, []);
+
   return (
-    <div className="flex h-screen flex-col bg-[#08090d]">
-      <header className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3">
+    <div
+      className="flex h-screen flex-col bg-[#08090d]"
+      data-shell-band={shellPolicy.band}
+      data-terminal-inset={shellPolicy.terminalInset}
+    >
+      <header
+        className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3"
+        data-compact-shell={compactShell ? "true" : "false"}
+        data-secondary-header-open={secondaryHeaderOpen ? "true" : "false"}
+      >
         <div className="flex items-center gap-2.5">
           <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">
             web_cli_v2
@@ -816,7 +860,10 @@ export default function WebCliV2() {
         </div>
       </header>
 
-      <div className="relative flex-1 overflow-hidden">
+      <div
+        className="relative flex-1 overflow-hidden"
+        data-drawer-width={shellPolicy.drawerWidth}
+      >
         {!browserShellOpen && !agentTerminalOpen && mode === "local" && sidebarOpen && (
           <div
             className="absolute inset-0 z-30"

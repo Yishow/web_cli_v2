@@ -46,3 +46,15 @@ test("getResponsiveShellPolicy defaults to compact-safe behavior before viewport
     drawerWidth: "tablet",
   });
 });
+
+test("phone widths stay compact and use phone drawer sizing", () => {
+  assert.deepEqual(getResponsiveShellPolicy(390), {
+    band: "compact",
+    isCompact: true,
+    usesOverlayDrawer: true,
+    secondaryHeaderCollapsedByDefault: true,
+    debugCollapsedByDefault: true,
+    terminalInset: "compact",
+    drawerWidth: "phone",
+  });
+});
