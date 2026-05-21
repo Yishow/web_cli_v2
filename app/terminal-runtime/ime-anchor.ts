@@ -12,6 +12,10 @@ interface AnchorBox {
   height: number;
 }
 
+interface ImeAnchorEnvironment {
+  maxTouchPoints?: number;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -28,7 +32,17 @@ export function getImeAnchorBox(cursorRect: RectLike, terminalRect: RectLike): A
   };
 }
 
+export function shouldAnchorImeComposition(
+  environment: ImeAnchorEnvironment,
+): boolean {
+  return (environment.maxTouchPoints ?? 0) === 0;
+}
+
 export function attachImeCompositionAnchor(terminalElement: HTMLElement): () => void {
+  if (!shouldAnchorImeComposition(window.navigator)) {
+    return () => {};
+  }
+
   let frameId: number | null = null;
 
   const sync = () => {

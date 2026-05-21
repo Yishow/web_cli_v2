@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getImeAnchorBox } from "./ime-anchor";
+import { getImeAnchorBox, shouldAnchorImeComposition } from "./ime-anchor";
 
 test("anchors the hidden textarea to the current cursor cell inside the terminal", () => {
   assert.deepEqual(
@@ -31,4 +31,13 @@ test("clamps the hidden textarea to the visible terminal bounds", () => {
       height: 1,
     },
   );
+});
+
+test("keeps IME anchoring enabled on non-touch environments", () => {
+  assert.equal(shouldAnchorImeComposition({ maxTouchPoints: 0 }), true);
+  assert.equal(shouldAnchorImeComposition({}), true);
+});
+
+test("disables IME anchoring on touch environments so mobile browsers do not scroll the terminal to reveal the hidden textarea", () => {
+  assert.equal(shouldAnchorImeComposition({ maxTouchPoints: 5 }), false);
 });
