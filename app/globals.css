@@ -183,8 +183,13 @@ select option {
 }
 
 .terminal-shell-root--compact {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
   height: var(--terminal-shell-viewport-height, 100dvh);
   min-height: var(--terminal-shell-viewport-height, 100dvh);
+  overflow: hidden;
 }
 
 .terminal-shell-stage--compact {
