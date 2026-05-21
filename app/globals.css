@@ -179,6 +179,7 @@ select option {
 }
 
 .terminal-shell-root--compact {
+  height: 100dvh;
   min-height: 100dvh;
 }
 
