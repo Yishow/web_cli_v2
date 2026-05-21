@@ -18,6 +18,10 @@ export const THEMES: ThemeMeta[] = [
 export const DEFAULT_THEME: ThemeId = "default";
 export const THEME_STORAGE_KEY = "webcli:theme-preference";
 
+export function getInitialThemePreference(): ThemeId {
+  return DEFAULT_THEME;
+}
+
 export function isThemeId(value: string | null | undefined): value is ThemeId {
   return THEMES.some((theme) => theme.id === value);
 }

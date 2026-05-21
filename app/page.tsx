@@ -37,6 +37,7 @@ import type {
 import {
   DEFAULT_THEME,
   getThemeMeta,
+  getInitialThemePreference,
   loadThemePreference,
   THEMES,
   THEME_STORAGE_KEY,
@@ -71,9 +72,7 @@ export default function WebCliV2() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const [themeId, setThemeId] = useState<ThemeId>(() =>
-    loadThemePreference(typeof window === "undefined" ? null : window.localStorage),
-  );
+  const [themeId, setThemeId] = useState<ThemeId>(getInitialThemePreference);
   const [terminalTitle, setTerminalTitle] = useState("");
   const [debugMode, setDebugMode] = useState(getInitialDebugMode);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot>(createDiagnosticsState);
@@ -362,6 +361,14 @@ export default function WebCliV2() {
     const timer = window.setTimeout(() => {
       const savedCore = loadCorePreference(window.localStorage);
       setCoreType((current) => (current === savedCore ? current : savedCore));
+    }, 0);
+    return () => { clearTimeout(timer); };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const savedTheme = loadThemePreference(window.localStorage);
+      setThemeId((current) => (current === savedTheme ? current : savedTheme));
     }, 0);
     return () => { clearTimeout(timer); };
   }, []);

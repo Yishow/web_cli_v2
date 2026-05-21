@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   DEFAULT_THEME,
   getThemeMeta,
+  getInitialThemePreference,
   isThemeId,
   loadThemePreference,
   THEMES,
@@ -36,6 +37,10 @@ test("THEMES exposes the expected built-in theme ids", () => {
     ["default", "solarized-dark", "monokai", "light"],
   );
   assert.equal(DEFAULT_THEME, "default");
+});
+
+test("getInitialThemePreference keeps the first server and client render deterministic", () => {
+  assert.equal(getInitialThemePreference(), "default");
 });
 
 test("isThemeId accepts only supported theme ids", () => {
